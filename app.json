@@ -1,0 +1,23 @@
+{
+  "expo": {
+    "name": "Wearhaus",
+    "slug": "wearhaus",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "splash": {
+      "backgroundColor": "#FDFBF4"
+    },
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "com.wearhaus.app"
+    },
+    "android": {
+      "package": "com.wearhaus.app",
+      "adaptiveIcon": {
+        "backgroundColor": "#FDFBF4"
+      }
+    }
+  }
+}
