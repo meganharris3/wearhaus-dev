@@ -1,15 +1,38 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import StatusTag from './StatusTag';
-import type { Item } from '../types';
+import type { Item, VisibilityMode } from '../types';
+
+const VIS_CONFIG: Record<VisibilityMode, {
+  bg: string; icon: React.ComponentProps<typeof Ionicons>['name']; iconColor: string; border?: string;
+}> = {
+  public:  { bg: '#14120C', icon: 'globe-outline',   iconColor: '#FDFBF4' },
+  friends: { bg: '#FFFFAD', icon: 'people-outline',  iconColor: '#3A3A00', border: '#C8C820' },
+  hauses:  { bg: '#F0EDE0', icon: 'home-outline',    iconColor: '#7A7762', border: '#E2DED0' },
+};
+
+function VisibilityIcon({ visibility }: { visibility: VisibilityMode }) {
+  const cfg = VIS_CONFIG[visibility];
+  return (
+    <View style={[
+      styles.visIcon,
+      { backgroundColor: cfg.bg, borderColor: cfg.border ?? 'transparent', borderWidth: cfg.border ? 1 : 0 },
+    ]}>
+      <Ionicons name={cfg.icon} size={14} color={cfg.iconColor} />
+    </View>
+  );
+}
 
 interface ItemCardProps {
   item: Item;
   onPress: () => void;
+  onEdit?: () => void;
+  onDelete?: () => void;
 }
 
-function ItemCard({ item, onPress }: ItemCardProps) {
+function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
   const priceFormatted = `$${(item.price_per_day / 100).toFixed(2)}/day`;
 
   return (
@@ -28,6 +51,19 @@ function ItemCard({ item, onPress }: ItemCardProps) {
         <View style={styles.tagWrapper}>
           <StatusTag status={item.status} />
         </View>
+        {onEdit && (
+          <Pressable onPress={onEdit} style={styles.editBtn} hitSlop={8}>
+            <Ionicons name="pencil" size={10} color={theme.colors.ink} />
+          </Pressable>
+        )}
+        {onDelete && (
+          <Pressable onPress={onDelete} style={styles.deleteBtn} hitSlop={8}>
+            <Ionicons name="trash-outline" size={10} color="#C0392B" />
+          </Pressable>
+        )}
+        {item.status !== 'draft' && item.visibility && (
+          <VisibilityIcon visibility={item.visibility} />
+        )}
       </View>
 
       {/* Card body */}
@@ -74,6 +110,38 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 6,
     left: 6,
+  },
+  editBtn: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: theme.colors.ivory,
+    borderWidth: 1,
+    borderColor: theme.colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteBtn: {
+    position: 'absolute',
+    top: 34,
+    right: 6,
+    width: 22,
+    height: 22,
+    borderRadius: 2,
+    backgroundColor: '#FFF0EE',
+    borderWidth: 1,
+    borderColor: '#C0392B',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  visIcon: {
+    position: 'absolute',
+    bottom: 6, right: 6,
+    width: 24, height: 24, borderRadius: 3,
+    alignItems: 'center', justifyContent: 'center',
   },
   body: {
     padding: 8,

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
+import NotificationBell from './NotificationBell';
 
 interface MastheadProps {
   subtitle?: string;
@@ -17,11 +17,7 @@ export default function Masthead({ subtitle }: MastheadProps) {
           <Text style={styles.haus}> HAUS</Text>
         </Text>
 
-        {/* Bell icon with badge */}
-        <View style={styles.bellWrapper}>
-          <Ionicons name="notifications-outline" size={22} color={theme.colors.ink} />
-          <View style={styles.badge} />
-        </View>
+        <NotificationBell />
       </View>
 
       {subtitle ? (
@@ -55,22 +51,6 @@ const styles = StyleSheet.create({
   },
   haus: {
     color: theme.colors.yellowText,
-    backgroundColor: theme.colors.yellow,
-  },
-  bellWrapper: {
-    position: 'relative',
-    width: 28,
-    height: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  badge: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
     backgroundColor: theme.colors.yellow,
   },
   subtitle: {

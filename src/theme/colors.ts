@@ -3,7 +3,7 @@ export const colors = {
   ivoryDark:    '#F0EDE0',
   ivoryMid:     '#E2DED0',
   yellow:       '#FFFFAD',
-  yellowBorder: '#C8C820',
+  yellowBorder: '#000000',
   yellowText:   '#3A3A00',
   ink:          '#14120C',
   muted:        '#7A7762',

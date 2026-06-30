@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import {
   View,
   Text,
@@ -7,48 +7,56 @@ import {
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../../theme';
 import HausListItem from '../../components/HausListItem';
-import type { Haus } from '../../types';
-
-const MOCK_HAUSES: Haus[] = [
-  {
-    id: '1',
-    name: 'NYU Village Collective',
-    member_count: 2,
-    piece_count: 5,
-    description: 'Lower Manhattan students.',
-  },
-  {
-    id: '2',
-    name: 'Uptown Closet',
-    member_count: 1,
-    piece_count: 3,
-    description: 'Columbia and Barnard students.',
-  },
-];
+import NotificationBell from '../../components/NotificationBell';
+import { useHauses } from '../../context/HausesContext';
+import { useCloset } from '../../context/ClosetContext';
+import type { AppStackParamList } from '../../navigation/AppStack';
 
 export default function HausesScreen() {
+  const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+  const { hauses } = useHauses();
+  const { items } = useCloset();
+
+  const pieceCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    for (const haus of hauses) {
+      counts[haus.id] = items.filter(
+        (item) => item.haus_visibility?.[haus.id] === true,
+      ).length;
+    }
+    return counts;
+  }, [hauses, items]);
+
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false}>
         {/* Header row */}
         <View style={styles.headerRow}>
           <Text style={styles.heading}>MY HAUSES</Text>
-          <Pressable style={styles.createButton}>
-            <Text style={styles.createButtonText}>+ CREATE</Text>
-          </Pressable>
+          <View style={styles.headerActions}>
+            <NotificationBell />
+            <Pressable
+              style={styles.createButton}
+              onPress={() => navigation.navigate('CreateHaus')}
+            >
+              <Text style={styles.createButtonText}>+ CREATE</Text>
+            </Pressable>
+          </View>
         </View>
 
         {/* Section label */}
         <Text style={styles.sectionLabel}>JOINED HAUSES</Text>
 
         {/* Haus list */}
-        {MOCK_HAUSES.map((haus) => (
+        {hauses.map((haus) => (
           <HausListItem
             key={haus.id}
             haus={haus}
-            onPress={() => {}}
+            pieceCount={pieceCounts[haus.id]}
+            onPress={() => navigation.navigate('HausDetail', { haus })}
           />
         ))}
 
@@ -70,7 +78,6 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.ivory,
   },
 
-  // Header row
   headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -78,6 +85,11 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingTop: theme.spacing.md,
     paddingBottom: 12,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   heading: {
     fontFamily: theme.fonts.barlowExtraBold,
@@ -88,19 +100,20 @@ const styles = StyleSheet.create({
   },
   createButton: {
     backgroundColor: theme.colors.yellow,
+    borderWidth: 1.5,
+    borderColor: theme.colors.yellowBorder,
     borderRadius: theme.borderRadius,
     paddingHorizontal: 12,
     paddingVertical: 6,
   },
   createButtonText: {
-    fontFamily: theme.fonts.barlowBold,
+    fontFamily: theme.fonts.barlowExtraBold,
     fontSize: 11,
     color: theme.colors.yellowText,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
 
-  // Section label
   sectionLabel: {
     fontFamily: theme.fonts.barlowBold,
     fontSize: 10,
@@ -112,7 +125,6 @@ const styles = StyleSheet.create({
     paddingBottom: 8,
   },
 
-  // Find more box
   findMoreBox: {
     backgroundColor: theme.colors.ivoryDark,
     borderWidth: 1,

@@ -4,19 +4,20 @@
     "slug": "wearhaus",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/icon.png",
     "userInterfaceStyle": "light",
-    "splash": {
-      "backgroundColor": "#FDFBF4"
-    },
     "ios": {
       "supportsTablet": false,
-      "bundleIdentifier": "com.wearhaus.app"
+      "bundleIdentifier": "com.wearhaus.app",
+      "infoPlist": {
+        "ITSAppUsesNonExemptEncryption": false
+      }
     },
     "android": {
-      "package": "com.wearhaus.app",
-      "adaptiveIcon": {
-        "backgroundColor": "#FDFBF4"
+      "package": "com.wearhaus.app"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "29a75092-2c03-4222-9dc8-add198253d8b"
       }
     }
   }

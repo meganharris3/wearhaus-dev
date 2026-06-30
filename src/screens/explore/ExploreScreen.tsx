@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,15 +6,23 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation, NavigationProp, useFocusEffect } from '@react-navigation/native';
 import { theme } from '../../theme';
 import Masthead from '../../components/Masthead';
 import SearchBar from '../../components/SearchBar';
 import ItemCard from '../../components/ItemCard';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
+import { Ionicons } from '@expo/vector-icons';
+import { useFriends } from '../../context/FriendsContext';
+import { useHauses } from '../../context/HausesContext';
+import { useAuth } from '../../context/AuthContext';
+import { getVisibleItems } from '../../utils/visibilityFilter';
+
+type AudienceFilter = 'all' | 'friends' | 'hauses';
 
 const MOCK_ITEMS: Item[] = [
   {
@@ -95,14 +103,44 @@ const FILTER_CHIPS = ['Size', 'Colour', 'Style', 'Event', 'Price'];
 
 export default function ExploreScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+  const { user } = useAuth();
+  const { friends } = useFriends();
+  const { hauses } = useHauses();
   const [searchQuery, setSearchQuery] = useState('');
+  const [audience, setAudience]       = useState<AudienceFilter>('all');
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+
+  const friendIds = useMemo(() => new Set(friends.map((f) => f.id)), [friends]);
+  const hausIds = useMemo(() => new Set(hauses.map((h) => h.id)), [hauses]);
+
+  useFocusEffect(
+    useCallback(() => {
+      fadeAnim.setValue(0);
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 280,
+        useNativeDriver: true,
+      }).start();
+    }, [fadeAnim]),
+  );
 
   const filteredItems = useMemo(() => {
-    if (!searchQuery.trim()) return MOCK_ITEMS;
-    return MOCK_ITEMS.filter((item) =>
-      item.name.toLowerCase().includes(searchQuery.toLowerCase())
+    const currentUser = { id: user?.id ?? '', friends, hauses };
+    let items = getVisibleItems(MOCK_ITEMS, currentUser);
+    if (audience === 'friends') {
+      items = items.filter((i) => i.owner?.id && friendIds.has(i.owner.id));
+    } else if (audience === 'hauses') {
+      items = items.filter((i) =>
+        Object.entries(i.haus_visibility ?? {}).some(
+          ([id, on]) => on && hausIds.has(id),
+        ),
+      );
+    }
+    if (!searchQuery.trim()) return items;
+    return items.filter((i) =>
+      i.name.toLowerCase().includes(searchQuery.toLowerCase()),
     );
-  }, [searchQuery]);
+  }, [searchQuery, audience, user?.id, friends, hauses, friendIds, hausIds]);
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
@@ -117,7 +155,8 @@ export default function ExploreScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <Animated.View style={{ flex: 1, opacity: fadeAnim }}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
@@ -134,6 +173,36 @@ export default function ExploreScreen() {
           <>
             {/* Masthead */}
             <Masthead subtitle="The Edit" />
+
+            {/* Audience filter tags */}
+            <View style={styles.audienceRow}>
+              <Pressable
+                style={[styles.audienceTag, audience === 'friends' && styles.audienceTagFriends]}
+                onPress={() => setAudience((p) => p === 'friends' ? 'all' : 'friends')}
+              >
+                <Ionicons
+                  name="people-outline"
+                  size={12}
+                  color={audience === 'friends' ? '#3A3A00' : theme.colors.muted}
+                />
+                <Text style={[styles.audienceTagText, audience === 'friends' && styles.audienceTagTextFriends]}>
+                  FRIENDS
+                </Text>
+              </Pressable>
+              <Pressable
+                style={[styles.audienceTag, audience === 'hauses' && styles.audienceTagHauses]}
+                onPress={() => setAudience((p) => p === 'hauses' ? 'all' : 'hauses')}
+              >
+                <Ionicons
+                  name="home-outline"
+                  size={12}
+                  color={audience === 'hauses' ? '#3A3A00' : theme.colors.muted}
+                />
+                <Text style={[styles.audienceTagText, audience === 'hauses' && styles.audienceTagTextHauses]}>
+                  HAUSES
+                </Text>
+              </Pressable>
+            </View>
 
             {/* Search bar */}
             <SearchBar
@@ -172,6 +241,7 @@ export default function ExploreScreen() {
         }
       />
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -188,6 +258,37 @@ const styles = StyleSheet.create({
   columnWrapper: {
     gap: 8,
   },
+
+  // Audience filter
+  audienceRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: 4,
+    paddingBottom: 2,
+  },
+  audienceTag: {
+    flexDirection: 'row', alignItems: 'center', gap: 5,
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderRadius: 20,
+    paddingHorizontal: 12, paddingVertical: 5,
+    backgroundColor: theme.colors.ivory,
+  },
+  audienceTagFriends: {
+    backgroundColor: '#FFFFAD',
+    borderColor: '#C8C820',
+  },
+  audienceTagHauses: {
+    backgroundColor: '#FFFFAD',
+    borderColor: '#C8C820',
+  },
+  audienceTagText: {
+    fontFamily: theme.fonts.barlowBold,
+    fontSize: 10, letterSpacing: 0.8,
+    textTransform: 'uppercase', color: theme.colors.muted,
+  },
+  audienceTagTextFriends: { color: '#3A3A00' },
+  audienceTagTextHauses:  { color: '#3A3A00' },
 
   // Filter chips
   chipsScroll: {

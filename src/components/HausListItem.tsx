@@ -5,6 +5,7 @@ import type { Haus } from '../types';
 
 interface HausListItemProps {
   haus: Haus;
+  pieceCount?: number;
   onPress: () => void;
 }
 
@@ -12,7 +13,7 @@ function getInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase();
 }
 
-export default function HausListItem({ haus, onPress }: HausListItemProps) {
+export default function HausListItem({ haus, pieceCount, onPress }: HausListItemProps) {
   // Generate up to 3 avatar placeholders from haus name words
   const words = haus.name.split(' ').slice(0, 3);
 
@@ -38,7 +39,7 @@ export default function HausListItem({ haus, onPress }: HausListItemProps) {
       <View style={styles.info}>
         <Text style={styles.hausName} numberOfLines={1}>{haus.name.toUpperCase()}</Text>
         <Text style={styles.meta}>
-          {haus.member_count} members · {haus.piece_count} pieces
+          {haus.member_count} members · {pieceCount ?? haus.piece_count} pieces
         </Text>
       </View>
 

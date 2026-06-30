@@ -13,7 +13,7 @@ export async function fetchUserProfile(userId: string): Promise<UserProfile | nu
 
 export async function updateUserProfile(
   userId: string,
-  updates: Partial<Pick<UserProfile, 'display_name' | 'bio' | 'avatar_url'>>,
+  updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'bio' | 'avatar_url'>>,
 ): Promise<void> {
   const { error } = await supabase.from('users').update(updates).eq('id', userId);
   if (error) throw new Error(error.message);

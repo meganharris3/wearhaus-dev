@@ -5,125 +5,116 @@ import {
   FlatList,
   ScrollView,
   Pressable,
-  Image,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import ItemCard from '../../components/ItemCard';
-import StatusTag from '../../components/StatusTag';
+import NotificationBell from '../../components/NotificationBell';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
+import { useCloset } from '../../context/ClosetContext';
 
-const MOCK_ITEMS: Item[] = [
-  {
-    id: '1',
-    name: 'Silk Slip Dress',
-    owner_id: '1',
-    category: 'dress',
-    size_label: 'S',
-    price_per_day: 800,
-    status: 'available',
-    location_label: '0.3 mi · NYU',
-    photo_url: 'https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?w=400',
-    owner: { id: '1', display_name: 'Maya Chen' },
-  },
-  {
-    id: '2',
-    name: 'Black Blazer',
-    owner_id: '1',
-    category: 'jacket',
-    size_label: 'M',
-    price_per_day: 500,
-    status: 'lent',
-    location_label: '0.3 mi · NYU',
-    photo_url: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400',
-    owner: { id: '1', display_name: 'Maya Chen' },
-  },
-  {
-    id: '3',
-    name: 'Festival Cowboy Boots',
-    owner_id: '2',
-    category: 'shoes',
-    size_label: 'US 8',
-    price_per_day: 600,
-    status: 'available',
-    location_label: '0.3 mi · NYU',
-    photo_url: 'https://images.unsplash.com/photo-1542291026-7eec264c27ff?w=400',
-    owner: { id: '2', display_name: 'Jordan Reyes' },
-  },
-  {
-    id: '4',
-    name: 'Sequin Mini Skirt',
-    owner_id: '1',
-    category: 'skirt',
-    size_label: 'XS',
-    price_per_day: 700,
-    status: 'wash',
-    location_label: '0.3 mi · NYU',
-    photo_url: 'https://images.unsplash.com/photo-1594938298603-c8148c4dae35?w=400',
-    owner: { id: '1', display_name: 'Maya Chen' },
-  },
-  {
-    id: '5',
-    name: 'Velvet Blazer',
-    owner_id: '2',
-    category: 'jacket',
-    size_label: 'M',
-    price_per_day: 900,
-    status: 'available',
-    location_label: '1.2 mi · Columbia',
-    photo_url: 'https://images.unsplash.com/photo-1617137968427-85924c800a22?w=400',
-    owner: { id: '2', display_name: 'Jordan Reyes' },
-  },
-  {
-    id: '6',
-    name: 'Emerald Gown',
-    owner_id: '3',
-    category: 'dress',
-    size_label: 'XS',
-    price_per_day: 1200,
-    status: 'available',
-    location_label: '0.5 mi · NYU Stern',
-    photo_url: 'https://images.unsplash.com/photo-1566174053879-31528523f8ae?w=400',
-    owner: { id: '3', display_name: 'Priya Patel' },
-  },
+const LEGEND = [
+  { key: 'public',  icon: 'globe-outline'  as const, bg: '#14120C', iconColor: '#FDFBF4', label: 'Public'  },
+  { key: 'friends', icon: 'people-outline' as const, bg: '#FFFFAD', iconColor: '#3A3A00', label: 'Friends' },
+  { key: 'hauses',  icon: 'home-outline'   as const, bg: '#F0EDE0', iconColor: '#7A7762', label: 'Hauses'  },
 ];
+
+function VisibilityLegend() {
+  return (
+    <View style={legendStyles.row}>
+      {LEGEND.map((l) => (
+        <View key={l.key} style={legendStyles.item}>
+          <View style={[legendStyles.icon, { backgroundColor: l.bg }]}>
+            <Ionicons name={l.icon} size={8} color={l.iconColor} />
+          </View>
+          <Text style={legendStyles.label}>{l.label}</Text>
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const legendStyles = StyleSheet.create({
+  row: {
+    flexDirection: 'row',
+    gap: 12,
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: 4,
+    paddingBottom: 12,
+  },
+  item: { flexDirection: 'row', alignItems: 'center', gap: 5 },
+  icon: {
+    width: 14, height: 14, borderRadius: 2,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  label: {
+    fontFamily: theme.fonts.interLight,
+    fontSize: 9, color: theme.colors.muted,
+  },
+});
 
 type ClosetTab = 'All' | 'Listed' | 'Lent Out' | 'Borrowed';
 const TABS: ClosetTab[] = ['All', 'Listed', 'Lent Out', 'Borrowed'];
 
 function filterItems(items: Item[], tab: ClosetTab): Item[] {
   switch (tab) {
-    case 'Listed':   return items.filter((i) => i.status === 'available' || i.status === 'wash');
+    case 'Listed':   return items.filter((i) => i.status === 'available' || i.status === 'wash' || i.status === 'draft');
     case 'Lent Out': return items.filter((i) => i.status === 'lent');
-    case 'Borrowed': return []; // No borrowed mock data
+    case 'Borrowed': return [];
     default:         return items;
   }
 }
 
 export default function ClosetScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+  const { items: allItems, deleteItem } = useCloset();
   const [activeTab, setActiveTab] = useState<ClosetTab>('All');
 
-  const filteredItems = useMemo(() => filterItems(MOCK_ITEMS, activeTab), [activeTab]);
-  const washItem = useMemo(() => MOCK_ITEMS.find((i) => i.status === 'wash'), []);
+  const filteredItems = useMemo(() => filterItems(allItems, activeTab), [allItems, activeTab]);
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
     [navigation],
   );
 
+  const handleItemEdit = useCallback(
+    (item: Item) => navigation.navigate('AddItem', { item }),
+    [navigation],
+  );
+
+  const handleItemDelete = useCallback(
+    (item: Item) => {
+      Alert.alert(
+        'Remove from closet',
+        `Delete "${item.name}"? This can't be undone.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Delete', style: 'destructive', onPress: () => deleteItem(item.id) },
+        ],
+      );
+    },
+    [deleteItem],
+  );
+
   const renderItem = useCallback(
     ({ item }: { item: Item }) => (
-      <ItemCard item={item} onPress={() => handleItemPress(item)} />
+      <ItemCard
+        item={item}
+        onPress={() => handleItemPress(item)}
+        onEdit={() => handleItemEdit(item)}
+        onDelete={() => handleItemDelete(item)}
+      />
     ),
-    [handleItemPress],
+    [handleItemPress, handleItemEdit, handleItemDelete],
   );
 
   return (
-    <SafeAreaView style={styles.safe}>
+    <SafeAreaView style={styles.safe} edges={["top"]}>
       <FlatList
         data={filteredItems}
         keyExtractor={(item) => item.id}
@@ -141,9 +132,15 @@ export default function ClosetScreen() {
             {/* Header row */}
             <View style={styles.headerRow}>
               <Text style={styles.heading}>MY CLOSET</Text>
-              <Pressable style={styles.addButton}>
-                <Text style={styles.addButtonText}>+ ADD</Text>
-              </Pressable>
+              <View style={styles.headerActions}>
+                {/* Bell */}
+                <NotificationBell />
+                {/* Add */}
+                <Pressable style={styles.addButton} onPress={() => navigation.navigate('AddItem')}>
+                  <Ionicons name="add" size={18} color={theme.colors.yellowText} />
+                  <Text style={styles.addButtonText}>ADD</Text>
+                </Pressable>
+              </View>
             </View>
 
             {/* Tab row */}
@@ -170,46 +167,13 @@ export default function ClosetScreen() {
               </ScrollView>
             </View>
 
-            {/* Wash item horizontal card (always show if exists and on All/Listed tabs) */}
-            {washItem && (activeTab === 'All' || activeTab === 'Listed') && (
-              <Pressable
-                onPress={() => navigation.navigate('ItemDetail', { item: washItem })}
-                style={styles.washCard}
-              >
-                <View style={styles.washImageContainer}>
-                  {washItem.photo_url ? (
-                    <Image
-                      source={{ uri: washItem.photo_url }}
-                      style={styles.washImage}
-                      resizeMode="cover"
-                    />
-                  ) : (
-                    <View style={[styles.washImage, { backgroundColor: theme.colors.ivoryMid }]} />
-                  )}
-                </View>
-                <View style={styles.washInfo}>
-                  <Text style={styles.washItemName} numberOfLines={1}>
-                    {washItem.name.toUpperCase()}
-                  </Text>
-                  <Text style={styles.washLender} numberOfLines={1}>
-                    {washItem.owner?.display_name ?? ''}
-                  </Text>
-                  <Text style={styles.washPrice}>
-                    ${(washItem.price_per_day / 100).toFixed(2)}/day
-                  </Text>
-                  <View style={styles.washTagRow}>
-                    <StatusTag status={washItem.status} />
-                  </View>
-                </View>
-              </Pressable>
-            )}
-
             {/* Results label */}
             <Text style={styles.resultsLabel}>
               Your pieces — {filteredItems.length}
             </Text>
           </>
         }
+        ListFooterComponent={filteredItems.length > 0 ? <VisibilityLegend /> : null}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
             <Text style={styles.emptyText}>NO PIECES HERE YET</Text>
@@ -250,18 +214,28 @@ const styles = StyleSheet.create({
     textTransform: 'uppercase',
     letterSpacing: 2,
   },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
   addButton: {
+    height: 38,
+    paddingHorizontal: 14,
     backgroundColor: theme.colors.yellow,
+    borderWidth: 2,
+    borderColor: theme.colors.yellowBorder,
     borderRadius: theme.borderRadius,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
   },
   addButtonText: {
-    fontFamily: theme.fonts.barlowBold,
-    fontSize: 11,
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 13,
     color: theme.colors.yellowText,
     textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 1.4,
   },
 
   // Tab row

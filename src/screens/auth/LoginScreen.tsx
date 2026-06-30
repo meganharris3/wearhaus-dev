@@ -62,7 +62,7 @@ export default function LoginScreen() {
           </View>
 
           {/* Tagline */}
-          <Text style={styles.tagline}>CAMPUS EXCHANGE</Text>
+          <Text style={styles.tagline}>UNLOCK YOUR DREAM CLOSET</Text>
 
           {/* Form */}
           <View style={styles.form}>
@@ -111,6 +111,7 @@ export default function LoginScreen() {
               <Text style={styles.linkBold}>SIGN UP</Text>
             </Text>
           </Pressable>
+
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

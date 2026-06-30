@@ -2,7 +2,7 @@ import React, { createContext, useCallback, useContext, useEffect, useState } fr
 import type { Session, User } from '@supabase/supabase-js';
 import { supabase } from '../lib/supabase';
 import { getSession, signIn as _signIn, signOut as _signOut, signUp as _signUp } from '../services/authService';
-import { fetchUserProfile } from '../services/userService';
+import { fetchUserProfile, updateUserProfile } from '../services/userService';
 import type { UserProfile } from '../types';
 
 interface AuthContextValue {
@@ -13,6 +13,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
+  updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -62,6 +63,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  const handleUpdateProfile = async (
+    updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio'>>,
+  ) => {
+    const userId = session?.user?.id;
+    if (!userId) throw new Error('Not authenticated');
+    await updateUserProfile(userId, updates);
+    setProfile((prev) => prev ? { ...prev, ...updates } : prev);
+  };
+
   return (
     <AuthContext.Provider value={{
       session,
@@ -71,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signIn: handleSignIn,
       signUp: handleSignUp,
       signOut: _signOut,
+      updateProfile: handleUpdateProfile,
     }}>
       {children}
     </AuthContext.Provider>
