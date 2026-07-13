@@ -1,35 +1,140 @@
-import React from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
   FlatList,
   Pressable,
   StyleSheet,
+  Alert,
+  Modal,
+  ScrollView,
+  TextInput,
+  Platform,
+  ToastAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native';
-import type { NavigationProp } from '@react-navigation/native';
+import type { RouteProp, NavigationProp } from '@react-navigation/native';
+import { Ionicons } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
 import { theme } from '../../theme';
 import ItemCard from '../../components/ItemCard';
+import Chip from '../../components/Chip';
 import { useCloset } from '../../context/ClosetContext';
+import { useHauses } from '../../context/HausesContext';
+import { useAuth } from '../../context/AuthContext';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
+const INVITE_LINK = 'wearhaus.app/join/';
+
+type ItemFilter = 'all' | 'mine' | 'available';
+
+const FILTERS: { key: ItemFilter; label: string }[] = [
+  { key: 'all',       label: 'All' },
+  { key: 'mine',      label: 'Your Items' },
+  { key: 'available', label: 'Available' },
+];
+
+interface InviteMember {
+  id: string;
+  name: string;
+  handle: string;
+  initials: string;
+  isYou: boolean;
+}
+
 function getInitial(word: string) {
   return word.trim().charAt(0).toUpperCase();
+}
+
+function showToast(msg: string) {
+  if (Platform.OS === 'android') {
+    ToastAndroid.show(msg, ToastAndroid.SHORT);
+  } else {
+    Alert.alert('', msg);
+  }
 }
 
 export default function HausDetailScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
   const route = useRoute<RouteProp<AppStackParamList, 'HausDetail'>>();
   const { haus } = route.params;
-  const { items: allItems } = useCloset();
+  const { items: allItems, updateItem } = useCloset();
+  const { leaveHaus, renameHaus } = useHauses();
+  const { user } = useAuth();
 
-  const items = allItems.filter(
-    (item) => item.haus_visibility?.[haus.id] === true,
-  );
-  const words = haus.name.split(' ').slice(0, 3);
+  const [inviteVisible, setInviteVisible]   = useState(false);
+  const [leaveVisible,  setLeaveVisible]    = useState(false);
+  const [isLeaving,     setIsLeaving]       = useState(false);
+  const [inviteInput, setInviteInput]       = useState('');
+  const [filter, setFilter]                 = useState<ItemFilter>('all');
+  const [localName,     setLocalName]       = useState(haus.name);
+  const [isEditingName, setIsEditingName]   = useState(false);
+  const [nameInput,     setNameInput]       = useState(haus.name);
+  const [members, setMembers]               = useState<InviteMember[]>([
+    { id: 'me', name: 'You', handle: '@you', initials: 'ME', isYou: true },
+  ]);
+
+  async function handleRename() {
+    const trimmed = nameInput.trim();
+    setIsEditingName(false);
+    if (!trimmed || trimmed === localName) return;
+    const prev = localName;
+    setLocalName(trimmed);
+    try { await renameHaus(haus.id, trimmed); } catch { setLocalName(prev); }
+  }
+
+  const hausItems = allItems.filter((item) => item.haus_visibility?.[haus.id] === true);
+  const items = hausItems.filter((item) => {
+    if (filter === 'mine')      return item.owner_id === 'me' || (user != null && item.owner_id === user.id);
+    if (filter === 'available') return item.status === 'available';
+    return true;
+  });
+  const words = localName.split(' ').slice(0, 3);
+  const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
+
+  function handleAddMember() {
+    const raw = inviteInput.trim();
+    if (!raw) return;
+    setMembers((prev) => [
+      ...prev,
+      {
+        id: Date.now().toString(),
+        name: raw.replace(/^@/, ''),
+        handle: raw.startsWith('@') ? raw : `@${raw}`,
+        initials: raw.replace('@', '').slice(0, 2).toUpperCase(),
+        isYou: false,
+      },
+    ]);
+    setInviteInput('');
+  }
+
+  function handleRemoveMember(id: string) {
+    setMembers((prev) => prev.filter((m) => m.id !== id));
+  }
+
+  async function handleCopyLink() {
+    await Clipboard.setStringAsync(inviteLink);
+    showToast('Link copied!');
+  }
+
+  async function confirmLeave() {
+    setIsLeaving(true);
+    try {
+      const hausItems = allItems.filter((item) => item.haus_visibility?.[haus.id] === true);
+      await Promise.all(
+        hausItems.map((item) =>
+          updateItem({ ...item, haus_visibility: { ...item.haus_visibility, [haus.id]: false } }),
+        ),
+      );
+      await leaveHaus(haus.id);
+      setLeaveVisible(false);
+      navigation.goBack();
+    } catch {
+      setIsLeaving(false);
+    }
+  }
 
   function renderItem({ item }: { item: Item }) {
     return (
@@ -51,37 +156,202 @@ export default function HausDetailScreen() {
         showsVerticalScrollIndicator={false}
         renderItem={renderItem}
         ListHeaderComponent={
-          <Header haus={haus} words={words} pieceCount={items.length} onBack={() => navigation.goBack()} />
+          <Header
+            haus={haus}
+            words={words}
+            localName={localName}
+            isEditingName={isEditingName}
+            nameInput={nameInput}
+            onNamePress={() => { setNameInput(localName); setIsEditingName(true); }}
+            onNameChange={setNameInput}
+            onNameSave={handleRename}
+            onNameCancel={() => setIsEditingName(false)}
+            totalCount={hausItems.length}
+            filteredCount={items.length}
+            filter={filter}
+            onFilterChange={setFilter}
+            onBack={() => navigation.goBack()}
+            onInvite={() => setInviteVisible(true)}
+            onLeave={() => setLeaveVisible(true)}
+          />
         }
         ListEmptyComponent={<EmptyState />}
       />
+
+      {/* ── Invite Modal ── */}
+      <Modal
+        visible={inviteVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setInviteVisible(false)}
+      >
+        <SafeAreaView style={modal.safe} edges={['top']}>
+          {/* Modal top bar */}
+          <View style={modal.topBar}>
+            <Text style={modal.title}>INVITE</Text>
+            <Pressable onPress={() => setInviteVisible(false)} hitSlop={10}>
+              <Ionicons name="close" size={20} color={theme.colors.ink} />
+            </Pressable>
+          </View>
+
+          <ScrollView
+            style={modal.scroll}
+            contentContainerStyle={modal.scrollContent}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            {/* Section: Add Members */}
+            <View style={modal.sectionHeader}>
+              <Text style={modal.sectionLabel}>ADD MEMBERS</Text>
+            </View>
+
+            <View style={modal.inviteRow}>
+              <TextInput
+                value={inviteInput}
+                onChangeText={setInviteInput}
+                placeholder="@username or phone…"
+                placeholderTextColor={theme.colors.muted}
+                style={modal.inviteInput}
+                onSubmitEditing={handleAddMember}
+                returnKeyType="done"
+                autoCapitalize="none"
+              />
+              <Pressable onPress={handleAddMember} style={modal.addBtn}>
+                <Text style={modal.addBtnText}>ADD</Text>
+              </Pressable>
+            </View>
+
+            {/* Member list */}
+            {members.map((m) => (
+              <View key={m.id} style={modal.memberRow}>
+                <View style={[modal.memberAvatar, m.isYou && modal.memberAvatarSelf]}>
+                  <Text style={modal.memberInitials}>{m.initials}</Text>
+                </View>
+                <View style={modal.memberInfo}>
+                  <Text style={modal.memberName}>{m.name}</Text>
+                  <Text style={modal.memberHandle}>{m.handle}</Text>
+                </View>
+                {m.isYou ? (
+                  <View style={modal.youBadge}>
+                    <Text style={modal.youBadgeText}>YOU</Text>
+                  </View>
+                ) : (
+                  <Pressable onPress={() => handleRemoveMember(m.id)} hitSlop={8}>
+                    <Ionicons name="close" size={16} color={theme.colors.muted} />
+                  </Pressable>
+                )}
+              </View>
+            ))}
+
+            {/* Section: Share Invite */}
+            <View style={modal.sectionHeader}>
+              <Text style={modal.sectionLabel}>SHARE INVITE</Text>
+            </View>
+
+            <View style={modal.shareRow}>
+              {[
+                { icon: 'link-outline' as const,         label: 'Copy Link', onPress: handleCopyLink },
+                { icon: 'qr-code-outline' as const,      label: 'QR Code',   onPress: () => showToast('Coming soon') },
+                { icon: 'share-social-outline' as const, label: 'Story',     onPress: () => showToast('Coming soon') },
+              ].map(({ icon, label, onPress }) => (
+                <Pressable key={label} style={modal.shareBtn} onPress={onPress}>
+                  <Ionicons name={icon} size={18} color={theme.colors.ink} />
+                  <Text style={modal.shareBtnText}>{label.toUpperCase()}</Text>
+                </Pressable>
+              ))}
+            </View>
+
+            {/* Invite link pill */}
+            <View style={modal.linkPill}>
+              <Text style={modal.linkText} numberOfLines={1}>{inviteLink}</Text>
+              <Pressable onPress={handleCopyLink}>
+                <Text style={modal.linkCopy}>COPY</Text>
+              </Pressable>
+            </View>
+
+            {/* Done button */}
+            <Pressable style={modal.doneBtn} onPress={() => setInviteVisible(false)}>
+              <Text style={modal.doneBtnText}>DONE</Text>
+            </Pressable>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* ── Leave Confirmation Modal ── */}
+      <Modal
+        visible={leaveVisible}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setLeaveVisible(false)}
+      >
+        <Pressable
+          style={leaveModal.overlay}
+          onPress={() => !isLeaving && setLeaveVisible(false)}
+        >
+          <Pressable style={leaveModal.card} onPress={() => {}}>
+            {/* Icon */}
+            <View style={leaveModal.iconWrap}>
+              <Ionicons name="exit-outline" size={24} color="#C0392B" />
+            </View>
+
+            <Text style={leaveModal.title}>LEAVE HAUS?</Text>
+            <Text style={leaveModal.body}>
+              You'll be removed from{' '}
+              <Text style={leaveModal.hausName}>{haus.name}</Text>
+              {' '}and your shared pieces will no longer appear here.
+            </Text>
+
+            <View style={leaveModal.btnRow}>
+              <Pressable
+                style={leaveModal.cancelBtn}
+                onPress={() => setLeaveVisible(false)}
+                disabled={isLeaving}
+              >
+                <Text style={leaveModal.cancelText}>CANCEL</Text>
+              </Pressable>
+              <Pressable
+                style={[leaveModal.leaveBtn, isLeaving && leaveModal.leaveBtnDisabled]}
+                onPress={confirmLeave}
+                disabled={isLeaving}
+              >
+                <Text style={leaveModal.leaveText}>
+                  {isLeaving ? 'LEAVING…' : 'LEAVE'}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
 
+// ─── Header ──────────────────────────────────────────────────────────────────
+
+type HausParam = RouteProp<AppStackParamList, 'HausDetail'>['params']['haus'];
+
 function Header({
-  haus,
-  words,
-  pieceCount,
-  onBack,
+  haus, words, localName, isEditingName, nameInput,
+  onNamePress, onNameChange, onNameSave, onNameCancel,
+  totalCount, filteredCount, filter, onFilterChange, onBack, onInvite, onLeave,
 }: {
-  haus: ReturnType<typeof useRoute<RouteProp<AppStackParamList, 'HausDetail'>>>['params']['haus'];
-  words: string[];
-  pieceCount: number;
-  onBack: () => void;
+  haus: HausParam; words: string[]; localName: string;
+  isEditingName: boolean; nameInput: string;
+  onNamePress: () => void; onNameChange: (v: string) => void;
+  onNameSave: () => void; onNameCancel: () => void;
+  totalCount: number; filteredCount: number;
+  filter: ItemFilter; onFilterChange: (f: ItemFilter) => void;
+  onBack: () => void; onInvite: () => void; onLeave: () => void;
 }) {
   return (
     <>
-      {/* Top bar */}
       <View style={styles.topBar}>
         <Pressable onPress={onBack} style={styles.backBtn}>
           <Text style={styles.backText}>← BACK</Text>
         </Pressable>
       </View>
 
-      {/* Haus hero card */}
       <View style={styles.heroCard}>
-        {/* Avatar stack */}
         <View style={styles.avatarStack}>
           {words.map((word, i) => (
             <View
@@ -97,7 +367,34 @@ function Header({
           ))}
         </View>
 
-        <Text style={styles.hausName}>{haus.name.toUpperCase()}</Text>
+        {isEditingName ? (
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+            <TextInput
+              value={nameInput}
+              onChangeText={onNameChange}
+              onSubmitEditing={onNameSave}
+              returnKeyType="done"
+              autoFocus
+              autoCapitalize="words"
+              style={[styles.hausName, {
+                flex: 1, borderBottomWidth: 1.5,
+                borderBottomColor: theme.colors.ink,
+                paddingVertical: 2,
+              }]}
+            />
+            <Pressable onPress={onNameSave} hitSlop={8}>
+              <Ionicons name="checkmark" size={20} color={theme.colors.ink} />
+            </Pressable>
+            <Pressable onPress={onNameCancel} hitSlop={8}>
+              <Ionicons name="close" size={20} color={theme.colors.muted} />
+            </Pressable>
+          </View>
+        ) : (
+          <Pressable onPress={onNamePress} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+            <Text style={styles.hausName}>{localName.toUpperCase()}</Text>
+            <Ionicons name="pencil-outline" size={18} color={theme.colors.muted} />
+          </Pressable>
+        )}
 
         {haus.description ? (
           <Text style={styles.description}>{haus.description}</Text>
@@ -110,19 +407,40 @@ function Header({
           </View>
           <View style={styles.metaDivider} />
           <View style={styles.metaPill}>
-            <Text style={styles.metaValue}>{pieceCount}</Text>
+            <Text style={styles.metaValue}>{totalCount}</Text>
             <Text style={styles.metaLabel}>PIECES</Text>
           </View>
         </View>
+
+        <View style={styles.actionRow}>
+          <Pressable style={styles.inviteBtn} onPress={onInvite}>
+            <Ionicons name="person-add-outline" size={14} color={theme.colors.yellowText} />
+            <Text style={styles.inviteBtnText}>INVITE FRIENDS</Text>
+          </Pressable>
+          <Pressable style={styles.leaveBtn} onPress={onLeave}>
+            <Ionicons name="exit-outline" size={14} color="#C0392B" />
+            <Text style={styles.leaveBtnText}>LEAVE HAUS</Text>
+          </Pressable>
+        </View>
       </View>
 
-      {/* Section header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionLabel}>CLOSET</Text>
-        {pieceCount > 0 && (
-          <Text style={styles.sectionCount}>{pieceCount} items</Text>
-        )}
+        {totalCount > 0 && <Text style={styles.sectionCount}>{filteredCount} items</Text>}
       </View>
+
+      {totalCount > 0 && (
+        <View style={styles.filterRow}>
+          {FILTERS.map((f) => (
+            <Chip
+              key={f.key}
+              label={f.label}
+              selected={filter === f.key}
+              onPress={() => onFilterChange(f.key)}
+            />
+          ))}
+        </View>
+      )}
     </>
   );
 }
@@ -140,152 +458,271 @@ function EmptyState() {
   );
 }
 
-const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: theme.colors.ivory },
+// ─── Styles ──────────────────────────────────────────────────────────────────
 
-  listContent: { paddingBottom: 32 },
-  columnWrapper: {
-    gap: 10,
-    paddingHorizontal: theme.spacing.md,
-    marginBottom: 10,
-  },
-
-  // Top bar
-  topBar: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 12,
-  },
-  backBtn: {},
-  backText: {
-    fontFamily: theme.fonts.barlowBold,
-    fontSize: 11,
-    color: theme.colors.ink,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-
-  // Hero card
-  heroCard: {
-    marginHorizontal: theme.spacing.md,
-    marginBottom: 20,
-    padding: 20,
-    borderWidth: 1.5,
-    borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius,
-    backgroundColor: theme.colors.ivory,
-  },
-  avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  avatar: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+const leaveModal = StyleSheet.create({
+  overlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
     alignItems: 'center',
     justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: '100%',
+    backgroundColor: theme.colors.ivory,
+    borderRadius: theme.borderRadius,
     borderWidth: 1.5,
-    borderColor: theme.colors.ivory,
+    borderColor: theme.colors.ink,
+    padding: 24,
+    alignItems: 'center',
   },
-  avatarInitial: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 13,
-    color: theme.colors.ink,
-  },
-  hausName: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 22,
-    color: theme.colors.ink,
-    letterSpacing: 2,
-    textTransform: 'uppercase',
-    marginBottom: 6,
-  },
-  description: {
-    fontFamily: theme.fonts.interLight,
-    fontSize: 13,
-    color: theme.colors.muted,
-    lineHeight: 19,
+  iconWrap: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#FFF0EE',
+    borderWidth: 1.5, borderColor: '#C0392B',
+    alignItems: 'center', justifyContent: 'center',
     marginBottom: 16,
   },
-  metaRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  metaPill: { alignItems: 'center' },
-  metaDivider: {
-    width: 1,
-    height: 24,
-    backgroundColor: theme.colors.ivoryMid,
-    marginHorizontal: 16,
-  },
-  metaValue: {
+  title: {
     fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 20,
+    fontSize: 18, letterSpacing: 2,
+    color: theme.colors.ink, textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  body: {
+    fontFamily: theme.fonts.interLight,
+    fontSize: 13, color: theme.colors.muted,
+    textAlign: 'center', lineHeight: 20,
+    marginBottom: 24,
+  },
+  hausName: {
+    fontFamily: theme.fonts.interSemiBold,
     color: theme.colors.ink,
   },
-  metaLabel: {
-    fontFamily: theme.fonts.barlowBold,
-    fontSize: 9,
-    color: theme.colors.muted,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginTop: 1,
+  btnRow: {
+    flexDirection: 'row', gap: 10, width: '100%',
+  },
+  cancelBtn: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderRadius: theme.borderRadius,
+  },
+  cancelText: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 11, color: theme.colors.muted,
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+  leaveBtn: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    backgroundColor: '#C0392B',
+    borderRadius: theme.borderRadius,
+  },
+  leaveBtnDisabled: { opacity: 0.5 },
+  leaveText: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 11, color: '#FFFFFF',
+    letterSpacing: 1, textTransform: 'uppercase',
+  },
+});
+
+const styles = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.ivory },
+  listContent: { paddingBottom: 32 },
+  columnWrapper: { gap: 10, paddingHorizontal: theme.spacing.md, marginBottom: 10 },
+
+  topBar: { paddingHorizontal: theme.spacing.md, paddingVertical: 12 },
+  backBtn: {},
+  backText: {
+    fontFamily: theme.fonts.barlowBold, fontSize: 11,
+    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.5,
   },
 
-  // Section header
+  heroCard: {
+    marginHorizontal: theme.spacing.md, marginBottom: 20,
+    padding: 20, borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, backgroundColor: theme.colors.ivory,
+  },
+  avatarStack: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
+  avatar: {
+    width: 36, height: 36, borderRadius: 18,
+    alignItems: 'center', justifyContent: 'center',
+    borderWidth: 1.5, borderColor: theme.colors.ivory,
+  },
+  avatarInitial: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 13, color: theme.colors.ink },
+  hausName: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 22,
+    color: theme.colors.ink, letterSpacing: 2,
+    textTransform: 'uppercase', marginBottom: 6,
+  },
+  description: {
+    fontFamily: theme.fonts.interLight, fontSize: 13,
+    color: theme.colors.muted, lineHeight: 19, marginBottom: 16,
+  },
+  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 20 },
+  metaPill: { alignItems: 'center' },
+  metaDivider: { width: 1, height: 24, backgroundColor: theme.colors.ivoryMid, marginHorizontal: 16 },
+  metaValue: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 20, color: theme.colors.ink },
+  metaLabel: {
+    fontFamily: theme.fonts.barlowBold, fontSize: 9,
+    color: theme.colors.muted, letterSpacing: 1.5,
+    textTransform: 'uppercase', marginTop: 1,
+  },
+
+  actionRow: { flexDirection: 'row', gap: 10 },
+  inviteBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10,
+    backgroundColor: theme.colors.yellow,
+    borderWidth: 1.5, borderColor: theme.colors.yellowBorder,
+    borderRadius: theme.borderRadius,
+  },
+  inviteBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
+    color: theme.colors.yellowText, letterSpacing: 1, textTransform: 'uppercase',
+  },
+  leaveBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 6, paddingVertical: 10,
+    borderWidth: 1.5, borderColor: '#C0392B',
+    borderRadius: theme.borderRadius, backgroundColor: '#FFF0EE',
+  },
+  leaveBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
+    color: '#C0392B', letterSpacing: 1, textTransform: 'uppercase',
+  },
+
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: 10,
-    borderTopWidth: 1,
-    borderBottomWidth: 1,
-    borderColor: theme.colors.ivoryMid,
-    backgroundColor: theme.colors.ivoryDark,
-    marginBottom: 14,
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: theme.spacing.md, paddingVertical: 10,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.colors.ivoryMid,
+    backgroundColor: theme.colors.ivoryDark, marginBottom: 14,
   },
   sectionLabel: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 11,
-    color: theme.colors.ink,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
+    color: theme.colors.ink, letterSpacing: 1.5, textTransform: 'uppercase',
   },
-  sectionCount: {
-    fontFamily: theme.fonts.interLight,
-    fontSize: 11,
-    color: theme.colors.muted,
+  sectionCount: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted },
+
+  filterRow: {
+    flexDirection: 'row', gap: 8,
+    paddingHorizontal: theme.spacing.md, paddingVertical: 12,
   },
 
-  // Empty
-  emptyWrap: {
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: 8,
-  },
+  emptyWrap: { paddingHorizontal: theme.spacing.md, paddingTop: 8 },
   emptyCard: {
-    borderWidth: 1.5,
-    borderColor: theme.colors.ivoryMid,
-    borderStyle: 'dashed',
-    borderRadius: theme.borderRadius,
-    padding: 32,
-    alignItems: 'center',
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderStyle: 'dashed', borderRadius: theme.borderRadius,
+    padding: 32, alignItems: 'center',
   },
   emptyTitle: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 13,
-    color: theme.colors.ink,
-    letterSpacing: 1.5,
-    textTransform: 'uppercase',
-    marginBottom: 6,
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 13,
+    color: theme.colors.ink, letterSpacing: 1.5,
+    textTransform: 'uppercase', marginBottom: 6,
   },
   emptySubtitle: {
-    fontFamily: theme.fonts.interLight,
-    fontSize: 12,
-    color: theme.colors.muted,
-    textAlign: 'center',
-    lineHeight: 18,
+    fontFamily: theme.fonts.interLight, fontSize: 12,
+    color: theme.colors.muted, textAlign: 'center', lineHeight: 18,
+  },
+});
+
+const modal = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: theme.colors.ivory },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 18, paddingTop: 8, paddingBottom: 12,
+    borderBottomWidth: 2, borderBottomColor: theme.colors.ink,
+  },
+  title: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 20,
+    letterSpacing: 0.6, textTransform: 'uppercase', color: theme.colors.ink,
+  },
+
+  scroll: { flex: 1 },
+  scrollContent: { paddingBottom: 48 },
+
+  sectionHeader: {
+    backgroundColor: theme.colors.ivoryDark,
+    borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.colors.ivoryMid,
+    paddingHorizontal: 18, paddingVertical: 8, marginBottom: 14,
+  },
+  sectionLabel: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    color: theme.colors.ink, letterSpacing: 1.5,
+  },
+
+  inviteRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, marginBottom: 14 },
+  inviteInput: {
+    flex: 1, borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, paddingHorizontal: 12, paddingVertical: 9,
+    fontFamily: theme.fonts.interLight, fontSize: 12, color: theme.colors.ink,
+  },
+  addBtn: {
+    backgroundColor: theme.colors.ink, borderRadius: theme.borderRadius,
+    paddingHorizontal: 14, justifyContent: 'center',
+  },
+  addBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    letterSpacing: 1.2, textTransform: 'uppercase', color: theme.colors.ivory,
+  },
+
+  memberRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 18, paddingVertical: 10,
+    borderBottomWidth: 0.5, borderBottomColor: theme.colors.ivoryMid, gap: 12,
+  },
+  memberAvatar: {
+    width: 34, height: 34, borderRadius: 17,
+    backgroundColor: theme.colors.ivoryMid,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  memberAvatarSelf: { backgroundColor: theme.colors.yellow },
+  memberInitials: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 11, color: theme.colors.ink },
+  memberInfo: { flex: 1 },
+  memberName: { fontFamily: theme.fonts.interSemiBold, fontSize: 13, color: theme.colors.ink },
+  memberHandle: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted, marginTop: 1 },
+  youBadge: {
+    backgroundColor: theme.colors.yellow, borderWidth: 1.5,
+    borderColor: theme.colors.yellowBorder, borderRadius: theme.borderRadius,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  youBadgeText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 8,
+    color: theme.colors.yellowText, letterSpacing: 1,
+  },
+
+  shareRow: { flexDirection: 'row', paddingHorizontal: 18, gap: 8, marginBottom: 12 },
+  shareBtn: {
+    flex: 1, alignItems: 'center', gap: 6, paddingVertical: 12,
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, backgroundColor: theme.colors.ivory,
+  },
+  shareBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 8,
+    color: theme.colors.ink, letterSpacing: 0.8,
+  },
+
+  linkPill: {
+    flexDirection: 'row', alignItems: 'center',
+    marginHorizontal: 18, paddingHorizontal: 12, paddingVertical: 10,
+    borderWidth: 1, borderColor: theme.colors.ivoryMid,
+    borderRadius: theme.borderRadius, backgroundColor: theme.colors.ivoryDark,
+    gap: 10, marginBottom: 28,
+  },
+  linkText: { flex: 1, fontFamily: theme.fonts.interRegular, fontSize: 11, color: theme.colors.muted },
+  linkCopy: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    color: theme.colors.yellowText, backgroundColor: theme.colors.yellow,
+    paddingHorizontal: 8, paddingVertical: 4,
+    borderRadius: theme.borderRadius, overflow: 'hidden', letterSpacing: 0.8,
+  },
+
+  doneBtn: {
+    marginHorizontal: 18, backgroundColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, paddingVertical: 14, alignItems: 'center',
+  },
+  doneBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 13,
+    color: theme.colors.ivory, textTransform: 'uppercase', letterSpacing: 1.5,
   },
 });

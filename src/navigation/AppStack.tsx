@@ -8,6 +8,9 @@ import AddItemScreen from '../screens/closet/AddItemScreen';
 import RequestsScreen from '../screens/closet/RequestsScreen';
 import CreateHausScreen from '../screens/hauses/CreateHausScreen';
 import HausDetailScreen from '../screens/hauses/HausDetailScreen';
+import BoardDetailScreen from '../screens/boards/BoardDetailScreen';
+import CreateBoardScreen from '../screens/boards/CreateBoardScreen';
+import AddItemsToBoardScreen from '../screens/boards/AddItemsToBoardScreen';
 import FriendsScreen from '../screens/profile/FriendsScreen';
 import FriendProfileScreen from '../screens/profile/FriendProfileScreen';
 import ChatThreadScreen from '../screens/messages/ChatThreadScreen';
@@ -15,6 +18,7 @@ import MakeOfferScreen from '../screens/messages/MakeOfferScreen';
 import { RequestsProvider } from '../context/RequestsContext';
 import { HausesProvider } from '../context/HausesContext';
 import { ClosetProvider } from '../context/ClosetContext';
+import { BoardsProvider } from '../context/BoardsContext';
 import { FriendsProvider } from '../context/FriendsContext';
 import { MessagesProvider } from '../context/MessagesContext';
 import type { Item, Haus } from '../types';
@@ -28,6 +32,9 @@ export type AppStackParamList = {
   Requests: undefined;
   CreateHaus: undefined;
   HausDetail: { haus: Haus };
+  BoardDetail: { boardId: string };
+  CreateBoard: { boardId?: string } | undefined;
+  AddItemsToBoard: { boardId: string };
   Friends: undefined;
   FriendProfile: { userId: string; name: string };
   ChatThread: { threadId: string };
@@ -41,24 +48,29 @@ export default function AppStack() {
     <MessagesProvider>
     <FriendsProvider>
     <ClosetProvider>
+    <BoardsProvider>
     <HausesProvider>
       <RequestsProvider>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Tabs"          component={AppTabs} />
-          <Stack.Screen name="ItemDetail"    component={ItemDetailScreen} />
-          <Stack.Screen name="Availability"  component={AvailabilityScreen} />
-          <Stack.Screen name="DatePicker"    component={DatePickerScreen} />
-          <Stack.Screen name="AddItem"       component={AddItemScreen} />
-          <Stack.Screen name="Requests"      component={RequestsScreen} />
-          <Stack.Screen name="CreateHaus"    component={CreateHausScreen} />
-          <Stack.Screen name="HausDetail"    component={HausDetailScreen} />
-          <Stack.Screen name="Friends"       component={FriendsScreen} />
-          <Stack.Screen name="FriendProfile" component={FriendProfileScreen} />
-          <Stack.Screen name="ChatThread"    component={ChatThreadScreen} />
-          <Stack.Screen name="MakeOffer"     component={MakeOfferScreen} />
+          <Stack.Screen name="Tabs"             component={AppTabs} />
+          <Stack.Screen name="ItemDetail"       component={ItemDetailScreen} />
+          <Stack.Screen name="Availability"     component={AvailabilityScreen} />
+          <Stack.Screen name="DatePicker"       component={DatePickerScreen} />
+          <Stack.Screen name="AddItem"          component={AddItemScreen} />
+          <Stack.Screen name="Requests"         component={RequestsScreen} />
+          <Stack.Screen name="CreateHaus"       component={CreateHausScreen} />
+          <Stack.Screen name="HausDetail"       component={HausDetailScreen} />
+          <Stack.Screen name="BoardDetail"      component={BoardDetailScreen} />
+          <Stack.Screen name="CreateBoard"      component={CreateBoardScreen} options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
+          <Stack.Screen name="AddItemsToBoard"  component={AddItemsToBoardScreen} />
+          <Stack.Screen name="Friends"          component={FriendsScreen} />
+          <Stack.Screen name="FriendProfile"    component={FriendProfileScreen} />
+          <Stack.Screen name="ChatThread"       component={ChatThreadScreen} />
+          <Stack.Screen name="MakeOffer"        component={MakeOfferScreen} />
         </Stack.Navigator>
       </RequestsProvider>
     </HausesProvider>
+    </BoardsProvider>
     </ClosetProvider>
     </FriendsProvider>
     </MessagesProvider>

@@ -3,7 +3,10 @@ import type { Item } from '../types';
 
 const ITEM_SELECT = `
   id, owner_id, name, photo_url, photo_urls, category, size_label,
-  price_per_day, price_per_week, status, location_label, description, created_at,
+  price_per_day, price_per_week, list_for_rental, max_duration, pickup_method,
+  condition, occasion_tags,
+  status, location_label, description, created_at,
+  visibility, haus_visibility,
   owner:users(id, display_name, avatar_url, rating, university)
 `;
 
@@ -54,7 +57,7 @@ export async function fetchItemById(id: string): Promise<Item | null> {
 
 export async function updateItem(
   id: string,
-  updates: Partial<Pick<Item, 'name' | 'description' | 'photo_url' | 'photo_urls' | 'category' | 'size_label' | 'price_per_day' | 'status' | 'location_label'>>,
+  updates: Partial<Pick<Item, 'name' | 'description' | 'photo_url' | 'photo_urls' | 'category' | 'size_label' | 'price_per_day' | 'list_for_rental' | 'max_duration' | 'pickup_method' | 'condition' | 'occasion_tags' | 'status' | 'location_label' | 'visibility' | 'haus_visibility'>>,
 ): Promise<Item> {
   let { data, error } = await supabase
     .from('items')
@@ -78,19 +81,26 @@ export async function updateItem(
 }
 
 export async function insertItem(
-  item: Pick<Item, 'name' | 'description' | 'photo_url' | 'photo_urls' | 'category' | 'size_label' | 'price_per_day' | 'status' | 'location_label'>,
+  item: Pick<Item, 'name' | 'description' | 'photo_url' | 'photo_urls' | 'category' | 'size_label' | 'price_per_day' | 'list_for_rental' | 'max_duration' | 'pickup_method' | 'condition' | 'occasion_tags' | 'status' | 'location_label' | 'visibility' | 'haus_visibility'>,
   userId: string,
 ): Promise<Item> {
   const base = {
-    name:           item.name,
-    description:    item.description ?? null,
-    photo_url:      item.photo_url ?? null,
-    category:       item.category,
-    size_label:     item.size_label,
-    price_per_day:  item.price_per_day,
-    status:         item.status,
-    location_label: item.location_label,
-    owner_id:       userId,
+    name:            item.name,
+    description:     item.description ?? null,
+    photo_url:       item.photo_url ?? null,
+    category:        item.category,
+    size_label:      item.size_label,
+    price_per_day:   item.price_per_day,
+    list_for_rental: item.list_for_rental ?? false,
+    max_duration:    item.max_duration ?? null,
+    pickup_method:   item.pickup_method ?? null,
+    condition:       item.condition ?? null,
+    occasion_tags:   item.occasion_tags ?? [],
+    status:          item.status,
+    location_label:  item.location_label,
+    visibility:      item.visibility ?? 'public',
+    haus_visibility: item.haus_visibility ?? {},
+    owner_id:        userId,
   };
 
   // Try with photo_urls array first; fall back if the column doesn't exist yet

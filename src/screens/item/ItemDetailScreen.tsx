@@ -158,6 +158,54 @@ export default function ItemDetailScreen({ route }: Props) {
           <Text style={styles.location}>{item.location_label}</Text>
           <View style={styles.divider} />
 
+          {/* Size & Condition */}
+          {(item.size_label || item.condition || item.occasion_tags?.length) && (
+            <>
+              <Text style={styles.descriptionLabel}>SIZE & CONDITION</Text>
+              <View style={styles.tagRow}>
+                {item.size_label && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{item.size_label}</Text>
+                  </View>
+                )}
+                {item.condition && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{item.condition}</Text>
+                  </View>
+                )}
+                {item.occasion_tags?.map((tag) => (
+                  <View key={tag} style={styles.tag}>
+                    <Text style={styles.tagText}>{tag}</Text>
+                  </View>
+                ))}
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
+
+          {/* Rental Settings */}
+          {item.list_for_rental && (item.max_duration || item.pickup_method) && (
+            <>
+              <Text style={styles.descriptionLabel}>RENTAL SETTINGS</Text>
+              <View style={styles.tagRow}>
+                <View style={styles.tag}>
+                  <Text style={styles.tagText}>{priceFormatted}</Text>
+                </View>
+                {item.max_duration && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>MAX {item.max_duration}</Text>
+                  </View>
+                )}
+                {item.pickup_method && (
+                  <View style={styles.tag}>
+                    <Text style={styles.tagText}>{item.pickup_method}</Text>
+                  </View>
+                )}
+              </View>
+              <View style={styles.divider} />
+            </>
+          )}
+
           {/* Availability shortcut (lender) */}
           {isOwner && (
             <Pressable
@@ -166,6 +214,18 @@ export default function ItemDetailScreen({ route }: Props) {
             >
               <Ionicons name="calendar-outline" size={16} color={theme.colors.ink} />
               <Text style={styles.availabilityRowText}>Manage Availability</Text>
+              <Ionicons name="chevron-forward" size={14} color={theme.colors.muted} />
+            </Pressable>
+          )}
+
+          {/* Edit shortcut (lender) */}
+          {isOwner && (
+            <Pressable
+              style={styles.availabilityRow}
+              onPress={() => navigation.navigate('AddItem', { item })}
+            >
+              <Ionicons name="create-outline" size={16} color={theme.colors.ink} />
+              <Text style={styles.availabilityRowText}>Edit Item</Text>
               <Ionicons name="chevron-forward" size={14} color={theme.colors.muted} />
             </Pressable>
           )}
@@ -319,6 +379,18 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.barlowBold, fontSize: 10,
     color: theme.colors.muted, textTransform: 'uppercase',
     letterSpacing: 2, marginBottom: 8,
+  },
+  tagRow: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 14,
+  },
+  tag: {
+    borderWidth: 1, borderColor: theme.colors.ink, borderRadius: 2,
+    paddingHorizontal: 9, paddingVertical: 5,
+    backgroundColor: theme.colors.ivoryDark,
+  },
+  tagText: {
+    fontFamily: theme.fonts.barlowBold, fontSize: 10,
+    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.5,
   },
   description: {
     fontFamily: theme.fonts.interRegular, fontSize: 13,

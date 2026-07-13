@@ -13,6 +13,17 @@ export interface ItemAvailability {
 }
 
 export type VisibilityMode = 'public' | 'friends' | 'hauses';
+export type CoverStyle = 'mosaic' | 'single' | 'stack';
+
+export interface Board {
+  id: string;
+  name: string;
+  visibility: VisibilityMode;
+  coverStyle: CoverStyle;
+  itemIds: string[];
+  createdAt: string;
+  ownerId: string;
+}
 
 export interface Item {
   id: string;
@@ -25,6 +36,11 @@ export interface Item {
   size_label: string;
   price_per_day: number;
   price_per_week?: number;
+  list_for_rental?: boolean;
+  max_duration?: string;
+  pickup_method?: string;
+  condition?: string;
+  occasion_tags?: string[];
   status: 'available' | 'lent' | 'wash' | 'draft';
   location_label: string;
   created_at?: string;

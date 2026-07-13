@@ -39,6 +39,35 @@ export async function createHaus(
   return data as Haus;
 }
 
+export async function updateHaus(
+  hausId: string,
+  updates: Partial<Pick<Haus, 'name' | 'description'>>,
+): Promise<void> {
+  const { error } = await supabase.from('hauses').update(updates).eq('id', hausId);
+  if (error) throw new Error(error.message);
+}
+
+export async function leaveHaus(hausId: string, userId: string): Promise<void> {
+  await supabase
+    .from('haus_memberships')
+    .delete()
+    .eq('haus_id', hausId)
+    .eq('user_id', userId);
+
+  // Decrement member count (floor at 0)
+  try {
+    await supabase.rpc('decrement_haus_member_count', { haus_id: hausId });
+  } catch {
+    const { data } = await supabase.from('hauses').select('member_count').eq('id', hausId).single();
+    if (data) {
+      await supabase
+        .from('hauses')
+        .update({ member_count: Math.max(0, (data.member_count ?? 1) - 1) })
+        .eq('id', hausId);
+    }
+  }
+}
+
 export async function fetchHausMembers(hausId: string) {
   const { data, error } = await supabase
     .from('haus_memberships')

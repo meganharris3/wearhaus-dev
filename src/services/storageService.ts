@@ -2,9 +2,14 @@ import { supabase } from '../lib/supabase';
 
 const BUCKET = 'item-photos';
 
-/** Returns true for local device URIs that need uploading */
+/** Returns true for local or temporary URIs that need uploading */
 function isLocalUri(uri: string): boolean {
-  return uri.startsWith('file://') || uri.startsWith('content://') || uri.startsWith('/var/');
+  return (
+    uri.startsWith('file://') ||
+    uri.startsWith('content://') ||
+    uri.startsWith('/var/') ||
+    uri.startsWith('blob:')
+  );
 }
 
 async function readAsBytes(localUri: string): Promise<{ bytes: Uint8Array; contentType: string }> {
@@ -44,7 +49,7 @@ export async function uploadAvatar(localUri: string, userId: string): Promise<st
 
   const { bytes, contentType } = await readAsBytes(localUri);
   const ext  = localUri.split('.').pop()?.toLowerCase().replace(/[^a-z]/, '') ?? 'jpg';
-  const path = `avatars/${userId}.${ext === 'jpeg' ? 'jpg' : ext}`;
+  const path = `${userId}/avatar.${ext === 'jpeg' ? 'jpg' : ext}`;
 
   const { data, error } = await supabase.storage
     .from(BUCKET)

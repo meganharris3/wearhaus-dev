@@ -63,25 +63,28 @@ export default function AddItemScreen() {
   const [description, setDescription] = useState(() => existingItem?.description ?? '');
   const [category, setCategory]       = useState<string | null>(() => existingItem?.category ?? null);
   const [size, setSize]               = useState<string | null>(() => existingItem?.size_label ?? null);
-  const [condition, setCondition]     = useState<string | null>(null);
-  const [occasionTags, setOccasionTags] = useState<string[]>([]);
+  const [condition, setCondition]     = useState<string | null>(() => existingItem?.condition ?? null);
+  const [occasionTags, setOccasionTags] = useState<string[]>(() => existingItem?.occasion_tags ?? []);
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
     if (!existingItem?.category) return [];
     return CATEGORIES.includes(existingItem.category) ? [] : [existingItem.category];
   });
-  const [customOccasions, setCustomOccasions] = useState<string[]>([]);
+  const [customOccasions, setCustomOccasions] = useState<string[]>(() => {
+    const existing = existingItem?.occasion_tags ?? [];
+    return existing.filter((tag) => !OCCASIONS.includes(tag));
+  });
   const [categoryInput, setCategoryInput] = useState('');
   const [occasionInput, setOccasionInput] = useState('');
   const [listForRental, setListForRental] = useState(
-    () => !existingItem || existingItem.price_per_day > 0,
+    () => existingItem ? !!existingItem.list_for_rental : true,
   );
   const [pricePerDay, setPricePerDay] = useState(
-    () => existingItem && existingItem.price_per_day > 0
+    () => existingItem?.list_for_rental
       ? (existingItem.price_per_day / 100).toFixed(2)
       : '',
   );
-  const [maxDuration, setMaxDuration] = useState('3 days');
-  const [pickup, setPickup]           = useState('Campus Pickup');
+  const [maxDuration, setMaxDuration] = useState(() => existingItem?.max_duration ?? '3 days');
+  const [pickup, setPickup]           = useState(() => existingItem?.pickup_method ?? 'Campus Pickup');
   const [hausSharing, setHausSharing] = useState<Record<string, boolean>>(() => {
     const existing = existingItem?.haus_visibility ?? {};
     return Object.fromEntries(hauses.map((h) => [h.id, existing[h.id] ?? false]));
@@ -182,12 +185,17 @@ export default function AddItemScreen() {
       category:        category ?? 'other',
       size_label:      size ?? '—',
       price_per_day:   listForRental && pricePerDay ? Math.round(parseFloat(pricePerDay) * 100) : 0,
+      list_for_rental: listForRental,
+      max_duration:    listForRental ? maxDuration : undefined,
+      pickup_method:   listForRental ? pickup : undefined,
+      condition:       condition ?? undefined,
+      occasion_tags:   occasionTags,
       status,
       location_label:  'My Campus',
       visibility,
       haus_visibility: hausSharing,
       owner: { id: 'me', display_name: 'You' },
-    } as const;
+    };
   }
 
   async function saveItem(status: 'available' | 'draft') {
@@ -214,6 +222,11 @@ export default function AddItemScreen() {
           price_per_day:   listForRental && pricePerDay
             ? Math.round(parseFloat(pricePerDay) * 100)
             : 0,
+          list_for_rental: listForRental,
+          max_duration:    listForRental ? maxDuration : undefined,
+          pickup_method:   listForRental ? pickup : undefined,
+          condition:       condition ?? undefined,
+          occasion_tags:   occasionTags,
           status,
           visibility,
           haus_visibility: hausSharing,

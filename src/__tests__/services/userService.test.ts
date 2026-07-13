@@ -68,7 +68,7 @@ describe('fetchUserProfile', () => {
     await fetchUserProfile('u1');
 
     expect(chain.select).toHaveBeenCalledWith(
-      'id, display_name, avatar_url, university, bio, items_listed, rentals_completed, rating'
+      'id, display_name, username, avatar_url, university, bio, items_listed, rentals_completed, rating'
     );
   });
 });
@@ -77,49 +77,53 @@ describe('fetchUserProfile', () => {
 // updateUserProfile
 // ---------------------------------------------------------------------------
 describe('updateUserProfile', () => {
-  function makeUpdateChain(result: { error: unknown }) {
+  function makeUpsertChain(result: { error: unknown }) {
     const chain: any = {};
-    chain.update = jest.fn().mockReturnValue(chain);
-    chain.eq     = jest.fn().mockReturnValue(chain);
-    chain.then   = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
-      Promise.resolve(result).then(resolve, reject);
+    chain.upsert = jest.fn().mockResolvedValue(result);
     return chain;
   }
 
-  it('resolves without error on successful update', async () => {
-    const chain = makeUpdateChain({ error: null });
+  it('resolves without error on successful upsert', async () => {
+    const chain = makeUpsertChain({ error: null });
     mockFrom.mockReturnValue(chain);
 
-    await expect(updateUserProfile('u1', { display_name: 'New Name' })).resolves.toBeUndefined();
+    await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name' })).resolves.toBeUndefined();
 
     expect(mockFrom).toHaveBeenCalledWith('users');
-    expect(chain.update).toHaveBeenCalledWith({ display_name: 'New Name' });
-    expect(chain.eq).toHaveBeenCalledWith('id', 'u1');
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'u1', email: 'u1@test.com', display_name: 'New Name' }),
+      { onConflict: 'id' },
+    );
   });
 
   it('throws when Supabase returns an error', async () => {
-    const chain = makeUpdateChain({ error: { message: 'Permission denied' } });
+    const chain = makeUpsertChain({ error: { message: 'Permission denied' } });
     mockFrom.mockReturnValue(chain);
 
-    await expect(updateUserProfile('u1', { bio: 'Hello' })).rejects.toThrow('Permission denied');
+    await expect(updateUserProfile('u1', 'u1@test.com', { bio: 'Hello' })).rejects.toThrow('Permission denied');
   });
 
   it('passes partial updates correctly', async () => {
-    const chain = makeUpdateChain({ error: null });
+    const chain = makeUpsertChain({ error: null });
     mockFrom.mockReturnValue(chain);
 
-    const updates = { bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' };
-    await updateUserProfile('u1', updates);
+    await updateUserProfile('u1', 'u1@test.com', { bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' });
 
-    expect(chain.update).toHaveBeenCalledWith(updates);
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' }),
+      { onConflict: 'id' },
+    );
   });
 
   it('can update only avatar_url', async () => {
-    const chain = makeUpdateChain({ error: null });
+    const chain = makeUpsertChain({ error: null });
     mockFrom.mockReturnValue(chain);
 
-    await updateUserProfile('u1', { avatar_url: 'https://cdn.test/photo.jpg' });
+    await updateUserProfile('u1', 'u1@test.com', { avatar_url: 'https://cdn.test/photo.jpg' });
 
-    expect(chain.update).toHaveBeenCalledWith({ avatar_url: 'https://cdn.test/photo.jpg' });
+    expect(chain.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({ avatar_url: 'https://cdn.test/photo.jpg' }),
+      { onConflict: 'id' },
+    );
   });
 });

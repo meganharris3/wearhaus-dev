@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -29,7 +29,6 @@ import type { AppTabsParamList } from '../../navigation/AppTabs';
 
 const { width: SCREEN_W } = Dimensions.get('window');
 const BODY_PAD = 18;
-const CARD_W   = (SCREEN_W - BODY_PAD * 2) / 3;
 const QA_W     = (SCREEN_W - BODY_PAD * 2 - 8) / 2;
 
 type ProfileNavProp = CompositeNavigationProp<
@@ -292,6 +291,16 @@ export default function ProfileScreen() {
   const [localAvatar,    setLocalAvatar]    = useState<string | null>(null);
   const [isSaving,       setIsSaving]       = useState(false);
 
+  // Sync local inputs when profile loads from DB (async) or after a save merge.
+  // Guard on !profile so we don't overwrite state with '' while profile is still loading.
+  useEffect(() => {
+    if (isEditing || !profile) return;
+    setLocationInput(profile.university ?? '');
+    setBioInput(profile.bio ?? '');
+    setNameInput(profile.display_name ?? '');
+    setUsernameInput(profile.username ?? deriveHandle(profile.display_name ?? '').replace(/^@/, ''));
+  }, [profile]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function pickAvatar() {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
@@ -323,11 +332,13 @@ export default function ProfileScreen() {
       await updateProfile({
         display_name: nameInput.trim(),
         username: usernameInput.trim().replace(/^@/, '').replace(/\s+/g, '_').toLowerCase(),
+        university: locationInput.trim(),
         bio: bioInput.trim(),
         ...(newAvatarUrl ? { avatar_url: newAvatarUrl } : {}),
       });
-    } catch {
-      Alert.alert('Error', 'Could not save changes. Try again.');
+    } catch (err) {
+      console.error('Failed to save profile:', err);
+      Alert.alert('Save failed', err instanceof Error ? err.message : String(err));
     } finally {
       setIsSaving(false);
       setIsEditing(false);
@@ -672,9 +683,10 @@ export default function ProfileScreen() {
                 onLink={() => navigation.navigate('Closet' as any)}
               />
               <View style={{
-                flexDirection: 'row', flexWrap: 'wrap',
+                flexDirection: 'row',
                 borderWidth: 1.5, borderColor: '#14120C',
-                borderRadius: 2, overflow: 'hidden',
+                borderRadius: 2,
+                overflow: 'hidden',
                 marginBottom: 16,
               }}>
                 {previewItems.map((item, i) => (
@@ -682,9 +694,8 @@ export default function ProfileScreen() {
                     key={item.id}
                     onPress={() => navigation.navigate('ItemDetail', { item })}
                     style={{
-                      width: CARD_W,
-                      borderRightWidth: i % 3 !== 2 ? 1 : 0,
-                      borderBottomWidth: 0,
+                      flex: 1,
+                      borderRightWidth: i < previewItems.length - 1 ? 1 : 0,
                       borderColor: '#14120C',
                     }}
                   >

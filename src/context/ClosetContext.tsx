@@ -63,15 +63,22 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
       try {
         const inserted = await insertItem(
           {
-            name:           item.name,
-            description:    item.description,
-            photo_url:      item.photo_url,
-            photo_urls:     item.photo_urls,
-            category:       item.category,
-            size_label:     item.size_label,
-            price_per_day:  item.price_per_day,
-            status:         item.status,
-            location_label: item.location_label,
+            name:            item.name,
+            description:     item.description,
+            photo_url:       item.photo_url,
+            photo_urls:      item.photo_urls,
+            category:        item.category,
+            size_label:      item.size_label,
+            price_per_day:   item.price_per_day,
+            list_for_rental: item.list_for_rental,
+            max_duration:    item.max_duration,
+            pickup_method:   item.pickup_method,
+            condition:       item.condition,
+            occasion_tags:   item.occasion_tags,
+            status:          item.status,
+            location_label:  item.location_label,
+            visibility:      item.visibility,
+            haus_visibility: item.haus_visibility,
           },
           user.id,
         );
@@ -79,7 +86,14 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
         // local item if the DB column doesn't exist yet (insertItem retries without it).
         finalItem = {
           ...inserted,
-          photo_urls: inserted.photo_urls?.length ? inserted.photo_urls : item.photo_urls,
+          photo_urls:      inserted.photo_urls?.length ? inserted.photo_urls : item.photo_urls,
+          visibility:      inserted.visibility      ?? item.visibility,
+          haus_visibility: inserted.haus_visibility ?? item.haus_visibility,
+          list_for_rental: inserted.list_for_rental ?? item.list_for_rental,
+          max_duration:    inserted.max_duration    ?? item.max_duration,
+          pickup_method:   inserted.pickup_method   ?? item.pickup_method,
+          condition:       inserted.condition       ?? item.condition,
+          occasion_tags:   inserted.occasion_tags   ?? item.occasion_tags,
         };
       } catch {
         // keep local item; photo URL already set by caller
@@ -110,15 +124,22 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
     if (user?.id) {
       try {
         await updateItemRemote(updated.id, {
-          name:           updated.name,
-          description:    updated.description,
-          photo_url:      updated.photo_url,
-          photo_urls:     updated.photo_urls,
-          category:       updated.category,
-          size_label:     updated.size_label,
-          price_per_day:  updated.price_per_day,
-          status:         updated.status,
-          location_label: updated.location_label,
+          name:            updated.name,
+          description:     updated.description,
+          photo_url:       updated.photo_url,
+          photo_urls:      updated.photo_urls,
+          category:        updated.category,
+          size_label:      updated.size_label,
+          price_per_day:   updated.price_per_day,
+          list_for_rental: updated.list_for_rental,
+          max_duration:    updated.max_duration,
+          pickup_method:   updated.pickup_method,
+          condition:       updated.condition,
+          occasion_tags:   updated.occasion_tags,
+          status:          updated.status,
+          location_label:  updated.location_label,
+          visibility:      updated.visibility,
+          haus_visibility: updated.haus_visibility,
         });
       } catch {
         // keep local changes even if remote fails

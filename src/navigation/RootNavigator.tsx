@@ -19,7 +19,7 @@ export default function RootNavigator() {
 
   return (
     <NavigationContainer>
-      {session ? <AppStack /> : <AuthStack />}
+      <AppStack />
     </NavigationContainer>
   );
 }

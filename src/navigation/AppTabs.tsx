@@ -4,17 +4,19 @@ import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import HomeScreen from '../screens/home/HomeScreen';
+import ExploreScreen from '../screens/home/ExploreScreen';
 import ClosetScreen from '../screens/closet/ClosetScreen';
-import HausesScreen from '../screens/hauses/HausesScreen';
+
 import ProfileScreen from '../screens/profile/ProfileScreen';
 import MessagesScreen from '../screens/messages/MessagesScreen';
 import { useMessages } from '../context/MessagesContext';
 
 export type AppTabsParamList = {
   Home: undefined;
+  Explore: undefined;
   Closet: undefined;
   Messages: undefined;
-  Hauses: undefined;
+
   Profile: undefined;
 };
 
@@ -22,8 +24,9 @@ type IconName = React.ComponentProps<typeof Ionicons>['name'];
 
 const ICONS: Record<string, [IconName, IconName]> = {
   Home:    ['home',          'home-outline'],
+  Explore: ['compass',       'compass-outline'],
   Closet:  ['shirt',         'shirt-outline'],
-  Hauses:  ['people',        'people-outline'],
+
   Profile: ['person-circle', 'person-circle-outline'],
 };
 
@@ -75,13 +78,14 @@ export default function AppTabs() {
       })}
     >
       <Tab.Screen name="Home"    component={HomeScreen} />
+      <Tab.Screen name="Explore" component={ExploreScreen} />
       <Tab.Screen name="Closet"  component={ClosetScreen} />
       <Tab.Screen
         name="Messages"
         component={MessagesScreen}
         options={{ tabBarIcon: (props) => <MessagesTabIcon {...props} /> }}
       />
-      <Tab.Screen name="Hauses"   component={HausesScreen} />
+
       <Tab.Screen name="Profile"  component={ProfileScreen} />
     </Tab.Navigator>
   );

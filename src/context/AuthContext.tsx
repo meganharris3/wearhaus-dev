@@ -13,7 +13,7 @@ interface AuthContextValue {
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
-  updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio'>>) => Promise<void>;
+  updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'university'>>) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -27,8 +27,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const p = await fetchUserProfile(userId);
       setProfile(p);
-    } catch {
-      setProfile(null);
+    } catch (err) {
+      console.error('Failed to load profile:', err);
+      // Keep the existing profile on transient failure (paused project, network blip)
+      // so the screen doesn't revert to fallback defaults.
+      // Sign-out clears profile via the onAuthStateChange else-branch below.
     }
   }, []);
 
@@ -64,11 +67,12 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleUpdateProfile = async (
-    updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio'>>,
+    updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'university'>>,
   ) => {
     const userId = session?.user?.id;
+    const email  = session?.user?.email ?? '';
     if (!userId) throw new Error('Not authenticated');
-    await updateUserProfile(userId, updates);
+    await updateUserProfile(userId, email, updates);
     setProfile((prev) => prev ? { ...prev, ...updates } : prev);
   };
 
