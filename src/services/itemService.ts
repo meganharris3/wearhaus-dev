@@ -59,22 +59,12 @@ export async function updateItem(
   id: string,
   updates: Partial<Pick<Item, 'name' | 'description' | 'photo_url' | 'photo_urls' | 'category' | 'size_label' | 'price_per_day' | 'list_for_rental' | 'max_duration' | 'pickup_method' | 'condition' | 'occasion_tags' | 'status' | 'location_label' | 'visibility' | 'haus_visibility'>>,
 ): Promise<Item> {
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('items')
     .update(updates)
     .eq('id', id)
     .select(ITEM_SELECT)
     .single();
-
-  if (error?.message?.includes('photo_urls')) {
-    const { photo_urls, ...updatesWithout } = updates;
-    ({ data, error } = await supabase
-      .from('items')
-      .update(updatesWithout)
-      .eq('id', id)
-      .select(ITEM_SELECT)
-      .single());
-  }
 
   if (error) throw new Error(error.message);
   return data as unknown as Item;
@@ -103,28 +93,20 @@ export async function insertItem(
     owner_id:        userId,
   };
 
-  // Try with photo_urls array first; fall back if the column doesn't exist yet
-  let { data, error } = await supabase
+  const { data, error } = await supabase
     .from('items')
     .insert({ ...base, photo_urls: item.photo_urls ?? [] })
     .select(ITEM_SELECT)
     .single();
-
-  if (error?.message?.includes('photo_urls')) {
-    ({ data, error } = await supabase
-      .from('items')
-      .insert(base)
-      .select(ITEM_SELECT)
-      .single());
-  }
 
   if (error) throw new Error(error.message);
   return data as unknown as Item;
 }
 
 export async function deleteItem(id: string): Promise<void> {
-  const { error } = await supabase.from('items').delete().eq('id', id);
+  const { data, error } = await supabase.from('items').delete().eq('id', id).select('id');
   if (error) throw new Error(error.message);
+  if (!data?.length) throw new Error('Item could not be deleted — check Supabase RLS: items table needs a DELETE policy with auth.uid() = owner_id');
 }
 
 export async function fetchMyItems(userId: string, tab: string): Promise<Item[]> {

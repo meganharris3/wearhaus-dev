@@ -162,8 +162,8 @@ export default function FriendsScreen() {
     [suggestedFriends, q],
   );
 
-  function handleAccept(requestId: string) {
-    const newFriend = acceptRequest(requestId);
+  async function handleAccept(requestId: string) {
+    const newFriend = await acceptRequest(requestId);
     showToast(`Connected with ${newFriend.name}`);
   }
 
@@ -221,7 +221,7 @@ export default function FriendsScreen() {
             <FriendRow
               key={f.id}
               friend={f}
-              onPress={() => navigation.navigate('FriendProfile', { userId: f.id, name: f.name })}
+              onPress={() => navigation.navigate('FriendProfile', { userId: f.id })}
             />
           ))
         )}

@@ -1,4 +1,4 @@
-import React, { useCallback, useRef, useMemo } from 'react';
+import React, { useCallback, useRef, useMemo, useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,11 +6,13 @@ import {
   Pressable,
   StyleSheet,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, CompositeNavigationProp } from '@react-navigation/native';
+import { useFadeOnFocus } from '../../hooks/useFadeOnFocus';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import Masthead from '../../components/Masthead';
 import ItemCard from '../../components/ItemCard';
@@ -18,18 +20,9 @@ import { useFriends } from '../../context/FriendsContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
 import { getVisibleItems } from '../../utils/visibilityFilter';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { fetchFeedItems } from '../../services/itemService';
 import type { Item } from '../../types';
-
-const MOCK_ITEMS: Item[] = [
-  { id: '1', name: 'Ribbed Cami Mini Dress', owner_id: '1', category: 'dress', size_label: 'XS/S', price_per_day: 800, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1726837214001-e1361c51732e?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Date Night', 'Going Out'] },
-  { id: '2', name: 'Plaid Micro Mini Skirt', owner_id: '1', category: 'skirt', size_label: 'XS/S', price_per_day: 500, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1570700006701-4bdeaf669738?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Festival', 'Casual'] },
-  { id: '3', name: 'Mesh Cut-Out Mini Dress', owner_id: '2', category: 'dress', size_label: 'S', price_per_day: 600, status: 'available', location_label: '0.1 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1671632777039-b6434382259d?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Date Night', 'Going Out'] },
-  { id: '4', name: 'Lace Corset Top', owner_id: '1', category: 'top', size_label: 'XS', price_per_day: 700, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1664875849333-798c9e0eaa62?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Date Night', 'Formal'] },
-  { id: '5', name: 'Satin Slip Mini Skirt', owner_id: '2', category: 'skirt', size_label: 'S', price_per_day: 900, status: 'available', location_label: '1.2 mi · Columbia', photo_url: 'https://images.unsplash.com/photo-1608033247410-817c68700611?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Date Night', 'Formal'] },
-  { id: '6', name: 'Ruched Bodycon Mini', owner_id: '3', category: 'dress', size_label: 'XS/S', price_per_day: 1000, status: 'available', location_label: '0.5 mi · NYU Stern', photo_url: 'https://images.unsplash.com/photo-1687832783432-e1d9a2f76876?w=400', owner: { id: '3', display_name: 'Priya Patel' }, occasion_tags: ['Going Out', 'Formal'] },
-  { id: '7', name: 'Crochet Crop Top', owner_id: '3', category: 'top', size_label: 'XS/S', price_per_day: 400, status: 'available', location_label: '0.5 mi · NYU Stern', photo_url: 'https://images.unsplash.com/photo-1742642277612-b6bfbcc1d946?w=400', owner: { id: '3', display_name: 'Priya Patel' }, occasion_tags: ['Festival', 'Casual'] },
-  { id: '8', name: 'Low-Rise Flare Jeans', owner_id: '2', category: 'pants', size_label: '25', price_per_day: 600, status: 'available', location_label: '0.1 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1689371953420-b6981e43fa38?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Casual', 'Festival'] },
-];
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AppTabsParamList } from '../../navigation/AppTabs';
 
@@ -40,10 +33,32 @@ type HomeNavProp = CompositeNavigationProp<
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNavProp>();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { friends } = useFriends();
   const { hauses } = useHauses();
+  const [feedItems, setFeedItems] = useState<Item[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
 
+  useEffect(() => {
+    let cancelled = false;
+    fetchFeedItems()
+      .then((items) => { if (!cancelled) setFeedItems(items); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setFeedLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // After onboarding completes with "Add My First Item", navigate there on first mount.
+  useEffect(() => {
+    AsyncStorage.getItem('wearhaus:pending_action').then((action) => {
+      if (action === 'add-item') {
+        AsyncStorage.removeItem('wearhaus:pending_action');
+        navigation.navigate('AddItem');
+      }
+    }).catch(() => {});
+  }, [navigation]);
+
+  const fadeOpacity  = useFadeOnFocus();
   const exploreScale = useRef(new Animated.Value(1)).current;
 
   const handleExplorePressIn = useCallback(() => {
@@ -56,15 +71,25 @@ export default function HomeScreen() {
 
   const displayItems = useMemo(() => {
     const currentUser = { id: user?.id ?? '', friends, hauses };
-    return getVisibleItems(MOCK_ITEMS, currentUser).filter((i) => i.status === 'available');
-  }, [user?.id, friends, hauses]);
+    return getVisibleItems(feedItems, currentUser).filter((i) => i.status === 'available');
+  }, [feedItems, user?.id, friends, hauses]);
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
     [navigation],
   );
 
+  if (feedLoading) {
+    return (
+      <SafeAreaView style={styles.safe} edges={['top']}>
+        <Masthead />
+        <ActivityIndicator style={{ marginTop: 40 }} color={theme.colors.ink} />
+      </SafeAreaView>
+    );
+  }
+
   return (
+    <Animated.View style={{ flex: 1, opacity: fadeOpacity }}>
     <SafeAreaView style={styles.safe} edges={['top']}>
       <FlatList
         data={displayItems}
@@ -106,6 +131,19 @@ export default function HomeScreen() {
               </Animated.View>
             </View>
 
+            {/* Campus strip */}
+            {profile?.campus_verified && (
+              <Pressable style={styles.campusStrip} onPress={() => { /* navigate to campus haus */ }}>
+                <View style={styles.campusBadge}>
+                  <Ionicons name="school-outline" size={14} color={theme.colors.ink} />
+                </View>
+                <View>
+                  <Text style={styles.campusStripTitle}>{profile.campus_name} Closet</Text>
+                  <Text style={styles.campusStripSub}>Tap to explore campus exchange →</Text>
+                </View>
+              </Pressable>
+            )}
+
             {/* Section label */}
             <View style={styles.dividerRow}>
               <View style={styles.dividerLine} />
@@ -122,10 +160,11 @@ export default function HomeScreen() {
         onPress={() => navigation.navigate('AddItem')}
         hitSlop={4}
       >
-        <Ionicons name="add" size={22} color={theme.colors.ink} />
+        <MaterialCommunityIcons name="hanger" size={20} color={theme.colors.ink} />
         <Text style={styles.fabLabel}>ADD</Text>
       </Pressable>
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -206,6 +245,12 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
+  // Campus strip
+  campusStrip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginBottom: 12, backgroundColor: theme.colors.ivoryDark, borderWidth: 1, borderColor: theme.colors.ivoryMid, borderRadius: 2, padding: 10 },
+  campusBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.yellow, borderWidth: 1, borderColor: '#C8C820', justifyContent: 'center', alignItems: 'center' },
+  campusStripTitle: { fontFamily: theme.fonts.interSemiBold, fontSize: 11, color: theme.colors.ink },
+  campusStripSub: { fontFamily: theme.fonts.interLight, fontSize: 9, color: theme.colors.muted },
+
   // FAB
   fab: {
     position: 'absolute',
@@ -214,12 +259,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
-    backgroundColor: theme.colors.yellow,
-    borderWidth: 1.5,
-    borderColor: theme.colors.yellowBorder,
-    borderRadius: 28,
     paddingVertical: 12,
     paddingHorizontal: 18,
+    backgroundColor: theme.colors.yellow,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink,
+    borderRadius: 28,
     shadowColor: theme.colors.ink,
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.15,
@@ -230,6 +275,6 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.barlowExtraBold,
     fontSize: 12,
     letterSpacing: 1,
-    color: theme.colors.yellowText,
+    color: theme.colors.ink,
   },
 });

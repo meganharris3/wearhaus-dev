@@ -9,9 +9,11 @@ import {
   Image,
   StyleSheet,
   Alert,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useFadeOnFocus } from '../../hooks/useFadeOnFocus';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import ItemCard from '../../components/ItemCard';
@@ -88,7 +90,7 @@ function BoardMosaicCover({ items, coverStyle }: { items: (Item | null)[]; cover
 
 function BoardCard({ board, allItems }: { board: Board; allItems: Item[] }) {
   const items = board.itemIds.map((id) => allItems.find((i) => i.id === id) ?? null);
-  const visLabel = { public: 'Public', friends: 'Friends', hauses: 'Hauses' }[board.visibility];
+  const visLabel = { public: 'Public', friends: 'Friends', private: 'Private' }[board.visibility];
   return (
     <View style={{ borderWidth: 1.5, borderColor: '#14120C', borderRadius: 2, overflow: 'hidden' }}>
       <BoardMosaicCover items={items} coverStyle={board.coverStyle} />
@@ -206,6 +208,7 @@ function filterItems(items: Item[], tab: ClosetTab): Item[] {
 
 export default function ClosetScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+  const fadeOpacity = useFadeOnFocus();
   const { items: allItems, deleteItem } = useCloset();
   const { boards } = useBoards();
   const [activeTab,  setActiveTab]  = useState<ClosetTab>('All');
@@ -230,7 +233,15 @@ export default function ClosetScreen() {
         `Delete "${item.name}"? This can't be undone.`,
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Delete', style: 'destructive', onPress: () => deleteItem(item.id) },
+          {
+            text: 'Delete',
+            style: 'destructive',
+            onPress: () => {
+              deleteItem(item.id).catch((err: Error) => {
+                Alert.alert('Could not delete', err.message);
+              });
+            },
+          },
         ],
       );
     },
@@ -250,6 +261,7 @@ export default function ClosetScreen() {
   );
 
   return (
+    <Animated.View style={{ flex: 1, opacity: fadeOpacity }}>
     <SafeAreaView style={styles.safe} edges={["top"]}>
       <FlatList
         data={viewMode === 'gallery' ? filteredItems : []}
@@ -334,6 +346,7 @@ export default function ClosetScreen() {
         ) : null}
       />
     </SafeAreaView>
+    </Animated.View>
   );
 }
 
@@ -395,11 +408,11 @@ const styles = StyleSheet.create({
   viewToggle: {
     flexDirection: 'row',
     marginHorizontal: 18, marginTop: 10, marginBottom: 4,
-    borderWidth: 1.5, borderColor: '#14120C', borderRadius: 2, overflow: 'hidden',
+    borderWidth: 1.5, borderColor: '#14120C', borderRadius: 20, overflow: 'hidden',
   },
   viewToggleBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 5, paddingVertical: 7, backgroundColor: 'transparent',
+    gap: 5, paddingVertical: 8, backgroundColor: 'transparent',
   },
   viewToggleBtnActive: { backgroundColor: '#FFFFAD' },
   viewToggleBtnBorder: { borderRightWidth: 1, borderRightColor: '#14120C' },

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
@@ -34,6 +34,7 @@ interface ItemCardProps {
 
 function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
   const priceFormatted = `$${(item.price_per_day / 100).toFixed(2)}/day`;
+  const [liked, setLiked] = useState(false);
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
@@ -68,15 +69,32 @@ function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
 
       {/* Card body */}
       <View style={styles.body}>
-        <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.lenderName} numberOfLines={1}>
-          {item.owner?.display_name ?? ''}
-        </Text>
-        <View style={styles.priceRow}>
-          <Text style={styles.price}>{priceFormatted}</Text>
-          <Text style={styles.size}>{item.size_label}</Text>
+        <View style={styles.bodyInner}>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
+            <Text style={styles.lenderName} numberOfLines={1}>
+              {item.owner?.display_name ?? ''}
+            </Text>
+            <View style={styles.priceRow}>
+              <Text style={styles.price}>{priceFormatted}</Text>
+              <Text style={styles.size}>{item.size_label}</Text>
+            </View>
+            <Text style={styles.location} numberOfLines={1}>{item.location_label}</Text>
+          </View>
+          {!onEdit && (
+            <Pressable
+              onPress={(e) => { e.stopPropagation(); setLiked((l) => !l); }}
+              style={styles.heartBtn}
+              hitSlop={6}
+            >
+              <Ionicons
+                name={liked ? 'heart' : 'heart-outline'}
+                size={18}
+                color={liked ? '#E8524A' : theme.colors.muted}
+              />
+            </Pressable>
+          )}
         </View>
-        <Text style={styles.location} numberOfLines={1}>{item.location_label}</Text>
       </View>
     </Pressable>
   );
@@ -136,6 +154,16 @@ const styles = StyleSheet.create({
     borderColor: '#C0392B',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  bodyInner: {
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 4,
+  },
+  heartBtn: {
+    paddingBottom: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
   },
   visIcon: {
     position: 'absolute',

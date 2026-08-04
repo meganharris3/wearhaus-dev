@@ -1,49 +1,61 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import {
+  fetchFriends,
+  fetchFriendRequests,
+  fetchSuggestedFriends,
+  sendFriendRequest,
+  acceptFriendRequest,
+  declineFriendRequest,
+} from '../services/friendService';
 import type { Friend, FriendRequest, SuggestedFriend } from '../types';
 
 interface FriendsContextValue {
   friends: Friend[];
   friendRequests: FriendRequest[];
   suggestedFriends: SuggestedFriend[];
-  acceptRequest: (requestId: string) => Friend;
-  declineRequest: (requestId: string) => void;
-  sendRequest: (userId: string) => void;
+  isLoading: boolean;
+  acceptRequest: (requestId: string) => Promise<Friend>;
+  declineRequest: (requestId: string) => Promise<void>;
+  sendRequest: (userId: string) => Promise<void>;
 }
 
 const FriendsContext = createContext<FriendsContextValue | null>(null);
 
-const SEED_FRIENDS: Friend[] = [
-  { id: 'u2', name: 'Sophie R.',  handle: '@sophier',   initials: 'SR', avatarColor: '#FFFFAD', itemsShared: 3 },
-  { id: 'u3', name: 'Ava L.',     handle: '@aval_nyu',  initials: 'AL', avatarColor: '#E2DED0', itemsShared: 5 },
-  { id: 'u4', name: 'Tara K.',    handle: '@tarakay',   initials: 'TK', avatarColor: '#DDD8CC', itemsShared: 1 },
-];
-
-const SEED_REQUESTS: FriendRequest[] = [
-  {
-    id: 'fr1',
-    from: { id: 'u5', name: 'Jade Torres', handle: '@jadeee',  initials: 'JT', avatarColor: '#FFFFAD', mutual: 12 },
-    status: 'pending',
-  },
-  {
-    id: 'fr2',
-    from: { id: 'u6', name: 'Priya M.',    handle: '@priyam',  initials: 'PM', avatarColor: '#E2DED0', mutual: 4  },
-    status: 'pending',
-  },
-];
-
-const SEED_SUGGESTED: SuggestedFriend[] = [
-  { id: 'u7', name: 'Nina K.',  handle: '@ninak',  initials: 'NK', avatarColor: '#DDD8CC', sharedHaus: 'Alpha Phi Closet',  mutual: 6, requestStatus: null },
-  { id: 'u8', name: 'Rosa S.',  handle: '@rosas',  initials: 'RS', avatarColor: '#E4DDD4', sharedHaus: 'Third Floor Stuy',  mutual: 2, requestStatus: 'pending' },
-  { id: 'u9', name: 'Maya L.',  handle: '@mayal',  initials: 'ML', avatarColor: '#D8D4C8', sharedHaus: 'Alpha Phi Closet',  mutual: 8, requestStatus: null },
-];
-
 export function FriendsProvider({ children }: { children: React.ReactNode }) {
-  const [friends,        setFriends]        = useState<Friend[]>(SEED_FRIENDS);
-  const [friendRequests, setFriendRequests] = useState<FriendRequest[]>(SEED_REQUESTS);
-  const [suggestedFriends, setSuggestedFriends] = useState<SuggestedFriend[]>(SEED_SUGGESTED);
+  const { user } = useAuth();
+  const [friends,          setFriends]          = useState<Friend[]>([]);
+  const [friendRequests,   setFriendRequests]   = useState<FriendRequest[]>([]);
+  const [suggestedFriends, setSuggestedFriends] = useState<SuggestedFriend[]>([]);
+  const [isLoading,        setIsLoading]        = useState(false);
 
-  const acceptRequest = useCallback((requestId: string): Friend => {
+  useEffect(() => {
+    if (!user?.id) {
+      setFriends([]);
+      setFriendRequests([]);
+      setSuggestedFriends([]);
+      return;
+    }
+    let cancelled = false;
+    setIsLoading(true);
+    Promise.all([
+      fetchFriends(user.id).catch(() => [] as Friend[]),
+      fetchFriendRequests(user.id).catch(() => [] as FriendRequest[]),
+      fetchSuggestedFriends(user.id).catch(() => [] as SuggestedFriend[]),
+    ]).then(([f, r, s]) => {
+      if (cancelled) return;
+      setFriends(f);
+      setFriendRequests(r);
+      setSuggestedFriends(s);
+    }).finally(() => {
+      if (!cancelled) setIsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
+  const acceptRequest = useCallback(async (requestId: string): Promise<Friend> => {
     const req = friendRequests.find((r) => r.id === requestId)!;
+    if (user?.id) await acceptFriendRequest(requestId, user.id).catch(() => {});
     const newFriend: Friend = {
       id:          req.from.id,
       name:        req.from.name,
@@ -55,21 +67,23 @@ export function FriendsProvider({ children }: { children: React.ReactNode }) {
     setFriends((prev) => [newFriend, ...prev]);
     setFriendRequests((prev) => prev.filter((r) => r.id !== requestId));
     return newFriend;
-  }, [friendRequests]);
+  }, [friendRequests, user?.id]);
 
-  const declineRequest = useCallback((requestId: string) => {
+  const declineRequest = useCallback(async (requestId: string) => {
+    if (user?.id) await declineFriendRequest(requestId, user.id).catch(() => {});
     setFriendRequests((prev) => prev.filter((r) => r.id !== requestId));
-  }, []);
+  }, [user?.id]);
 
-  const sendRequest = useCallback((userId: string) => {
+  const sendRequest = useCallback(async (toUserId: string) => {
+    if (user?.id) await sendFriendRequest(user.id, toUserId).catch(() => {});
     setSuggestedFriends((prev) =>
-      prev.map((s) => s.id === userId ? { ...s, requestStatus: 'pending' } : s),
+      prev.map((s) => s.id === toUserId ? { ...s, requestStatus: 'pending' as const } : s),
     );
-  }, []);
+  }, [user?.id]);
 
   return (
     <FriendsContext.Provider value={{
-      friends, friendRequests, suggestedFriends,
+      friends, friendRequests, suggestedFriends, isLoading,
       acceptRequest, declineRequest, sendRequest,
     }}>
       {children}

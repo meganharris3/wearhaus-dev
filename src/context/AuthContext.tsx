@@ -4,6 +4,8 @@ import { supabase } from '../lib/supabase';
 import { getSession, signIn as _signIn, signOut as _signOut, signUp as _signUp } from '../services/authService';
 import { fetchUserProfile, updateUserProfile } from '../services/userService';
 import type { UserProfile } from '../types';
+import type { CampusInfo } from '../data/campusDomains';
+import { updateUserCampus, markOnboardingComplete } from '../services/campusService';
 
 interface AuthContextValue {
   session: Session | null;
@@ -14,6 +16,9 @@ interface AuthContextValue {
   signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'university'>>) => Promise<void>;
+  refreshProfile: () => Promise<void>;
+  updateCampus: (campusInfo: CampusInfo, schoolEmail: string) => Promise<void>;
+  completeOnboarding: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -66,14 +71,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return { error: error?.message ?? null };
   };
 
+  // Pull the live session from Supabase storage rather than React state.
+  // React state can be transiently null if a TOKEN_REFRESHED or SIGNED_IN
+  // event hasn't propagated back into state yet (e.g. BorrowsContext triggers
+  // an RLS query that causes a token refresh before the user taps Save).
+  const getLiveUserId = async (): Promise<{ userId: string; email: string; liveSession: typeof session }> => {
+    const { data: { session: live } } = await supabase.auth.getSession();
+    const userId = live?.user?.id ?? session?.user?.id;
+    const email  = live?.user?.email ?? session?.user?.email ?? '';
+    if (!userId) throw new Error('Not authenticated');
+    if (live && !session) setSession(live);
+    return { userId, email, liveSession: live };
+  };
+
   const handleUpdateProfile = async (
     updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'university'>>,
   ) => {
-    const userId = session?.user?.id;
-    const email  = session?.user?.email ?? '';
-    if (!userId) throw new Error('Not authenticated');
-    await updateUserProfile(userId, email, updates);
-    setProfile((prev) => prev ? { ...prev, ...updates } : prev);
+    const { userId, email } = await getLiveUserId();
+    const saved = await updateUserProfile(userId, email, updates);
+    setProfile(saved);
+  };
+
+  const handleRefreshProfile = async () => {
+    const userId = session?.user?.id ?? (await supabase.auth.getSession()).data.session?.user?.id;
+    if (userId) await loadProfile(userId);
+  };
+
+  const handleUpdateCampus = async (campusInfo: CampusInfo, schoolEmail: string) => {
+    const { userId } = await getLiveUserId();
+    await updateUserCampus(userId, campusInfo, schoolEmail);
+    setProfile((prev) => prev ? { ...prev, campus_verified: true, campus_id: campusInfo.id, campus_name: campusInfo.name, school_email: schoolEmail } : prev);
+  };
+
+  const handleCompleteOnboarding = async () => {
+    const { userId } = await getLiveUserId();
+    await markOnboardingComplete(userId);
+    setProfile((prev) => prev ? { ...prev, onboarding_complete: true } : prev);
   };
 
   return (
@@ -86,6 +119,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       signUp: handleSignUp,
       signOut: _signOut,
       updateProfile: handleUpdateProfile,
+      refreshProfile: handleRefreshProfile,
+      updateCampus: handleUpdateCampus,
+      completeOnboarding: handleCompleteOnboarding,
     }}>
       {children}
     </AuthContext.Provider>

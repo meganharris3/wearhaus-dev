@@ -9,51 +9,14 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
-import VisibilityToggle from '../../components/VisibilityToggle';
+import VisibilityToggle, { BOARD_OPTIONS } from '../../components/VisibilityToggle';
 import { useBoards } from '../../context/BoardsContext';
 import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
-import type { CoverStyle, VisibilityMode } from '../../types';
+import type { VisibilityMode } from '../../types';
 
 type Nav = NativeStackNavigationProp<AppStackParamList>;
 type Route = RouteProp<AppStackParamList, 'CreateBoard'>;
-
-const COVER_STYLES: { key: CoverStyle; label: string }[] = [
-  { key: 'mosaic', label: 'Mosaic' },
-  { key: 'single', label: 'Single' },
-  { key: 'stack',  label: 'Stack'  },
-];
-
-function CoverPreview({ coverStyle, active }: { coverStyle: CoverStyle; active: boolean }) {
-  const cell = { backgroundColor: active ? '#C8C820' : '#E2DED0' };
-  const dim = { width: '100%' as const, height: 44 };
-
-  if (coverStyle === 'single') {
-    return <View style={[dim, { backgroundColor: active ? '#FFFFAD' : '#F0EDE0' }]} />;
-  }
-  if (coverStyle === 'stack') {
-    return (
-      <View style={[dim, { overflow: 'hidden' }]}>
-        <View style={{ flex: 1, backgroundColor: active ? '#FFFFAD' : '#F0EDE0', borderBottomWidth: 1, borderBottomColor: active ? '#C8C820' : '#E2DED0' }} />
-        <View style={{ flex: 1, backgroundColor: active ? '#C8C820' : '#E2DED0' }} />
-      </View>
-    );
-  }
-  // mosaic
-  return (
-    <View style={[dim, { flexDirection: 'row', flexWrap: 'wrap', overflow: 'hidden' }]}>
-      {[0,1,2,3].map((i) => (
-        <View key={i} style={{
-          width: '50%', height: '50%',
-          backgroundColor: i % 2 === 0 ? (active ? '#FFFFAD' : '#F0EDE0') : (active ? '#C8C820' : '#E2DED0'),
-          borderRightWidth: i % 2 === 0 ? 0.5 : 0,
-          borderBottomWidth: i < 2 ? 0.5 : 0,
-          borderColor: active ? '#C8C820' : '#E2DED0',
-        }} />
-      ))}
-    </View>
-  );
-}
 
 export default function CreateBoardScreen() {
   const navigation = useNavigation<Nav>();
@@ -65,9 +28,8 @@ export default function CreateBoardScreen() {
   const existingBoard = editId ? boards.find((b) => b.id === editId) : undefined;
   const isEdit = !!existingBoard;
 
-  const [boardName,   setBoardName]   = useState(existingBoard?.name        ?? '');
-  const [visibility,  setVisibility]  = useState<VisibilityMode>(existingBoard?.visibility  ?? 'public');
-  const [coverStyle,  setCoverStyle]  = useState<CoverStyle>(existingBoard?.coverStyle  ?? 'mosaic');
+  const [boardName,  setBoardName]  = useState(existingBoard?.name       ?? '');
+  const [visibility, setVisibility] = useState<VisibilityMode>(existingBoard?.visibility ?? 'public');
 
   function handleSave() {
     const name = boardName.trim();
@@ -77,14 +39,14 @@ export default function CreateBoardScreen() {
     }
 
     if (isEdit && existingBoard) {
-      updateBoard({ ...existingBoard, name, visibility, coverStyle });
+      updateBoard({ ...existingBoard, name, visibility, coverStyle: 'mosaic' });
       navigation.goBack();
     } else {
       const newBoard = {
         id: `board_${Date.now()}`,
         name,
         visibility,
-        coverStyle,
+        coverStyle: 'mosaic' as const,
         itemIds: [],
         createdAt: new Date().toISOString(),
         ownerId: user?.id ?? 'me',
@@ -147,27 +109,7 @@ export default function CreateBoardScreen() {
 
             {/* Visibility */}
             <Text style={[styles.fieldLabel, { marginTop: 20 }]}>VISIBILITY</Text>
-            <VisibilityToggle value={visibility} onChange={setVisibility} />
-
-            {/* Cover style */}
-            <Text style={[styles.fieldLabel, { marginTop: 20 }]}>COVER STYLE</Text>
-            <View style={styles.coverRow}>
-              {COVER_STYLES.map((opt) => {
-                const active = coverStyle === opt.key;
-                return (
-                  <Pressable
-                    key={opt.key}
-                    onPress={() => setCoverStyle(opt.key)}
-                    style={[styles.coverOption, active && styles.coverOptionActive]}
-                  >
-                    <CoverPreview coverStyle={opt.key} active={active} />
-                    <Text style={[styles.coverLabel, active && styles.coverLabelActive]}>
-                      {opt.label.toUpperCase()}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </View>
+            <VisibilityToggle value={visibility} onChange={setVisibility} options={BOARD_OPTIONS} />
 
             {/* Create / Save */}
             <Pressable style={styles.createBtn} onPress={handleSave}>
@@ -239,27 +181,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 10,
     fontFamily: theme.fonts.interLight,
     fontSize: 14, color: theme.colors.ink,
-  },
-
-  coverRow: { flexDirection: 'row', gap: 8 },
-  coverOption: {
-    flex: 1,
-    borderWidth: 1.5, borderColor: '#E2DED0',
-    borderRadius: theme.borderRadius,
-    overflow: 'hidden',
-  },
-  coverOptionActive: { borderWidth: 2, borderColor: '#C8C820' },
-  coverLabel: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 8, letterSpacing: 1,
-    textAlign: 'center',
-    color: '#7A7762',
-    paddingVertical: 5,
-    backgroundColor: 'transparent',
-  },
-  coverLabelActive: {
-    color: '#3A3A00',
-    backgroundColor: '#FFFFAD',
   },
 
   createBtn: {

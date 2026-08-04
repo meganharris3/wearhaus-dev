@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
-  FlatList,
   Pressable,
   StyleSheet,
   Alert,
@@ -11,6 +10,8 @@ import {
   TextInput,
   Platform,
   ToastAndroid,
+  TouchableOpacity,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -23,17 +24,28 @@ import Chip from '../../components/Chip';
 import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
+import {
+  useHausCollections, MOCK_HAUS_ITEMS,
+  type HausCollection,
+} from '../../context/HausCollectionsContext';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
 const INVITE_LINK = 'wearhaus.app/join/';
 
 type ItemFilter = 'all' | 'mine' | 'available';
+type Tab = 'items' | 'collections' | 'members';
 
 const FILTERS: { key: ItemFilter; label: string }[] = [
   { key: 'all',       label: 'All' },
   { key: 'mine',      label: 'Your Items' },
   { key: 'available', label: 'Available' },
+];
+
+const TABS: { key: Tab; label: string }[] = [
+  { key: 'items',       label: 'All Items' },
+  { key: 'collections', label: 'Collections' },
+  { key: 'members',     label: 'Members' },
 ];
 
 interface InviteMember {
@@ -56,6 +68,151 @@ function showToast(msg: string) {
   }
 }
 
+// ─── HausCollectionCard ───────────────────────────────────────────────────────
+
+function HausCollectionCard({
+  collection,
+  onPress,
+}: {
+  collection: HausCollection;
+  onPress: () => void;
+}) {
+  const { items: closetItems } = useCloset();
+  const count = collection.itemIds.length;
+
+  // Resolve up to 3 item thumbnails
+  const thumbColors = collection.itemIds.slice(0, 3).map(id => {
+    const real = closetItems.find(i => i.id === id);
+    if (real) return { color: '#E4E0D0', url: real.photo_url };
+    const mock = MOCK_HAUS_ITEMS.find(m => m.id === id);
+    return { color: mock?.photoThumbColor ?? '#E4E0D0', url: undefined };
+  });
+  // Pad to 3
+  while (thumbColors.length < 3) thumbColors.push({ color: '#EEEAE0', url: undefined });
+
+  return (
+    <TouchableOpacity onPress={onPress} style={coll.card} activeOpacity={0.85}>
+      <View style={coll.thumbRow}>
+        {thumbColors.map((t, i) => (
+          <View key={i} style={[coll.thumb, { backgroundColor: t.color }]}>
+            {t.url ? (
+              <Image source={{ uri: t.url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+            ) : (
+              <Ionicons name="shirt-outline" size={11} color="#14120C" style={{ opacity: 0.12 }} />
+            )}
+          </View>
+        ))}
+      </View>
+      <View style={coll.cardBody}>
+        <Text numberOfLines={1} style={coll.cardName}>{collection.name}</Text>
+        <Text style={coll.cardCount}>{count} item{count !== 1 ? 's' : ''}</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+// ─── HausCollectionsGrid ─────────────────────────────────────────────────────
+
+function HausCollectionsGrid({
+  hausId,
+  collections,
+  onCollectionPress,
+  onCreatePress,
+}: {
+  hausId: string;
+  collections: HausCollection[];
+  onCollectionPress: (c: HausCollection) => void;
+  onCreatePress: () => void;
+}) {
+  // 2-col grid: new-collection dashed card first, then collection cards
+  type GridItem =
+    | { type: 'new' }
+    | { type: 'coll'; collection: HausCollection };
+
+  const allCards: GridItem[] = [
+    { type: 'new' },
+    ...collections.map(c => ({ type: 'coll' as const, collection: c })),
+  ];
+
+  const rows: GridItem[][] = [];
+  for (let i = 0; i < allCards.length; i += 2) {
+    rows.push(allCards.slice(i, i + 2));
+  }
+
+  if (collections.length === 0) {
+    return (
+      <View style={coll.wrapper}>
+        <TouchableOpacity onPress={onCreatePress} style={coll.newCard} activeOpacity={0.85}>
+          <Ionicons name="add" size={20} color={theme.colors.muted} />
+          <Text style={coll.newCardText}>NEW COLLECTION</Text>
+        </TouchableOpacity>
+        <View style={coll.emptyWrap}>
+          <Text style={coll.emptyText}>Create your first collection to start curating together.</Text>
+        </View>
+      </View>
+    );
+  }
+
+  return (
+    <View style={coll.wrapper}>
+      {rows.map((row, ri) => (
+        <View key={ri} style={coll.row}>
+          {row.map((item, ci) => {
+            if (item.type === 'new') {
+              return (
+                <TouchableOpacity
+                  key="new"
+                  onPress={onCreatePress}
+                  style={coll.newCard}
+                  activeOpacity={0.85}
+                >
+                  <Ionicons name="add" size={20} color={theme.colors.muted} />
+                  <Text style={coll.newCardText}>NEW COLLECTION</Text>
+                </TouchableOpacity>
+              );
+            }
+            return (
+              <HausCollectionCard
+                key={item.collection.id}
+                collection={item.collection}
+                onPress={() => onCollectionPress(item.collection)}
+              />
+            );
+          })}
+          {row.length === 1 && <View style={coll.card} />}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── HausMembersList ─────────────────────────────────────────────────────────
+
+function HausMembersList({ members }: { members: InviteMember[] }) {
+  return (
+    <View style={{ paddingTop: 4 }}>
+      {members.map(m => (
+        <View key={m.id} style={mem.row}>
+          <View style={[mem.avatar, m.isYou && mem.avatarSelf]}>
+            <Text style={mem.initials}>{m.initials}</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={mem.name}>{m.name}</Text>
+            <Text style={mem.handle}>{m.handle}</Text>
+          </View>
+          {m.isYou && (
+            <View style={mem.youBadge}>
+              <Text style={mem.youBadgeText}>YOU</Text>
+            </View>
+          )}
+        </View>
+      ))}
+    </View>
+  );
+}
+
+// ─── Main Screen ─────────────────────────────────────────────────────────────
+
 export default function HausDetailScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
   const route = useRoute<RouteProp<AppStackParamList, 'HausDetail'>>();
@@ -63,18 +220,29 @@ export default function HausDetailScreen() {
   const { items: allItems, updateItem } = useCloset();
   const { leaveHaus, renameHaus } = useHauses();
   const { user } = useAuth();
+  const { getCollectionsForHaus } = useHausCollections();
 
-  const [inviteVisible, setInviteVisible]   = useState(false);
-  const [leaveVisible,  setLeaveVisible]    = useState(false);
-  const [isLeaving,     setIsLeaving]       = useState(false);
-  const [inviteInput, setInviteInput]       = useState('');
-  const [filter, setFilter]                 = useState<ItemFilter>('all');
-  const [localName,     setLocalName]       = useState(haus.name);
-  const [isEditingName, setIsEditingName]   = useState(false);
-  const [nameInput,     setNameInput]       = useState(haus.name);
-  const [members, setMembers]               = useState<InviteMember[]>([
+  const [activeTab,    setActiveTab]    = useState<Tab>('items');
+  const [inviteVisible, setInviteVisible] = useState(false);
+  const [leaveVisible,  setLeaveVisible]  = useState(false);
+  const [isLeaving,     setIsLeaving]     = useState(false);
+  const [inviteInput,   setInviteInput]   = useState('');
+  const [filter,        setFilter]        = useState<ItemFilter>('all');
+  const [localName,     setLocalName]     = useState(haus.name);
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [nameInput,     setNameInput]     = useState(haus.name);
+  const [members, setMembers] = useState<InviteMember[]>([
     { id: 'me', name: 'You', handle: '@you', initials: 'ME', isYou: true },
   ]);
+
+  const hausItems = allItems.filter(item => item.haus_visibility?.[haus.id] === true);
+  const filteredItems = hausItems.filter(item => {
+    if (filter === 'mine')      return item.owner_id === 'me' || (user != null && item.owner_id === user.id);
+    if (filter === 'available') return item.status === 'available';
+    return true;
+  });
+  const collections = getCollectionsForHaus(haus.id);
+  const words = localName.split(' ').slice(0, 3);
 
   async function handleRename() {
     const trimmed = nameInput.trim();
@@ -85,36 +253,28 @@ export default function HausDetailScreen() {
     try { await renameHaus(haus.id, trimmed); } catch { setLocalName(prev); }
   }
 
-  const hausItems = allItems.filter((item) => item.haus_visibility?.[haus.id] === true);
-  const items = hausItems.filter((item) => {
-    if (filter === 'mine')      return item.owner_id === 'me' || (user != null && item.owner_id === user.id);
-    if (filter === 'available') return item.status === 'available';
-    return true;
-  });
-  const words = localName.split(' ').slice(0, 3);
-  const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
-
   function handleAddMember() {
     const raw = inviteInput.trim();
     if (!raw) return;
-    setMembers((prev) => [
+    setMembers(prev => [
       ...prev,
       {
-        id: Date.now().toString(),
-        name: raw.replace(/^@/, ''),
-        handle: raw.startsWith('@') ? raw : `@${raw}`,
+        id:       Date.now().toString(),
+        name:     raw.replace(/^@/, ''),
+        handle:   raw.startsWith('@') ? raw : `@${raw}`,
         initials: raw.replace('@', '').slice(0, 2).toUpperCase(),
-        isYou: false,
+        isYou:    false,
       },
     ]);
     setInviteInput('');
   }
 
   function handleRemoveMember(id: string) {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
+    setMembers(prev => prev.filter(m => m.id !== id));
   }
 
   async function handleCopyLink() {
+    const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
     await Clipboard.setStringAsync(inviteLink);
     showToast('Link copied!');
   }
@@ -122,9 +282,8 @@ export default function HausDetailScreen() {
   async function confirmLeave() {
     setIsLeaving(true);
     try {
-      const hausItems = allItems.filter((item) => item.haus_visibility?.[haus.id] === true);
       await Promise.all(
-        hausItems.map((item) =>
+        hausItems.map(item =>
           updateItem({ ...item, haus_visibility: { ...item.haus_visibility, [haus.id]: false } }),
         ),
       );
@@ -136,47 +295,183 @@ export default function HausDetailScreen() {
     }
   }
 
-  function renderItem({ item }: { item: Item }) {
-    return (
-      <ItemCard
-        item={item}
-        onPress={() => navigation.navigate('ItemDetail', { item })}
-      />
-    );
+  // Manual 2-col item grid rows
+  const itemRows: Item[][] = [];
+  for (let i = 0; i < filteredItems.length; i += 2) {
+    itemRows.push(filteredItems.slice(i, i + 2));
   }
+
+  const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      <FlatList
-        data={items}
-        keyExtractor={(i) => i.id}
-        numColumns={2}
-        columnWrapperStyle={styles.columnWrapper}
-        contentContainerStyle={styles.listContent}
-        showsVerticalScrollIndicator={false}
-        renderItem={renderItem}
-        ListHeaderComponent={
-          <Header
-            haus={haus}
-            words={words}
-            localName={localName}
-            isEditingName={isEditingName}
-            nameInput={nameInput}
-            onNamePress={() => { setNameInput(localName); setIsEditingName(true); }}
-            onNameChange={setNameInput}
-            onNameSave={handleRename}
-            onNameCancel={() => setIsEditingName(false)}
-            totalCount={hausItems.length}
-            filteredCount={items.length}
-            filter={filter}
-            onFilterChange={setFilter}
-            onBack={() => navigation.goBack()}
-            onInvite={() => setInviteVisible(true)}
-            onLeave={() => setLeaveVisible(true)}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+
+        {/* Back */}
+        <View style={styles.topBar}>
+          <Pressable onPress={() => navigation.goBack()}>
+            <Text style={styles.backText}>← BACK</Text>
+          </Pressable>
+        </View>
+
+        {/* Hero card */}
+        <View style={styles.heroCard}>
+          <View style={styles.avatarStack}>
+            {words.map((word, i) => (
+              <View
+                key={i}
+                style={[
+                  styles.avatar,
+                  { backgroundColor: i === 0 ? theme.colors.yellow : theme.colors.ivoryMid },
+                  i > 0 && { marginLeft: -12 },
+                ]}
+              >
+                <Text style={styles.avatarInitial}>{getInitial(word)}</Text>
+              </View>
+            ))}
+          </View>
+
+          {isEditingName ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+              <TextInput
+                value={nameInput}
+                onChangeText={setNameInput}
+                onSubmitEditing={handleRename}
+                returnKeyType="done"
+                autoFocus
+                autoCapitalize="words"
+                style={[styles.hausName, {
+                  flex: 1, borderBottomWidth: 1.5,
+                  borderBottomColor: theme.colors.ink,
+                  paddingVertical: 2,
+                }]}
+              />
+              <Pressable onPress={handleRename} hitSlop={8}>
+                <Ionicons name="checkmark" size={20} color={theme.colors.ink} />
+              </Pressable>
+              <Pressable onPress={() => setIsEditingName(false)} hitSlop={8}>
+                <Ionicons name="close" size={20} color={theme.colors.muted} />
+              </Pressable>
+            </View>
+          ) : (
+            <Pressable
+              onPress={() => { setNameInput(localName); setIsEditingName(true); }}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}
+            >
+              <Text style={styles.hausName}>{localName.toUpperCase()}</Text>
+              <Ionicons name="pencil-outline" size={18} color={theme.colors.muted} />
+            </Pressable>
+          )}
+
+          {haus.description ? (
+            <Text style={styles.description}>{haus.description}</Text>
+          ) : null}
+
+          <View style={styles.metaRow}>
+            <View style={styles.metaPill}>
+              <Text style={styles.metaValue}>{haus.member_count}</Text>
+              <Text style={styles.metaLabel}>MEMBERS</Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View style={styles.metaPill}>
+              <Text style={styles.metaValue}>{hausItems.length}</Text>
+              <Text style={styles.metaLabel}>PIECES</Text>
+            </View>
+            <View style={styles.metaDivider} />
+            <View style={styles.metaPill}>
+              <Text style={styles.metaValue}>{collections.length}</Text>
+              <Text style={styles.metaLabel}>COLLECTIONS</Text>
+            </View>
+          </View>
+
+          <View style={styles.actionRow}>
+            <Pressable style={styles.inviteBtn} onPress={() => setInviteVisible(true)}>
+              <Ionicons name="person-add-outline" size={14} color={theme.colors.yellowText} />
+              <Text style={styles.inviteBtnText}>INVITE FRIENDS</Text>
+            </Pressable>
+            <Pressable style={styles.leaveBtn} onPress={() => setLeaveVisible(true)}>
+              <Ionicons name="exit-outline" size={14} color="#C0392B" />
+              <Text style={styles.leaveBtnText}>LEAVE HAUS</Text>
+            </Pressable>
+          </View>
+        </View>
+
+        {/* ── Tab Bar ── */}
+        <View style={styles.tabBar}>
+          {TABS.map(tab => (
+            <TouchableOpacity
+              key={tab.key}
+              onPress={() => setActiveTab(tab.key)}
+              style={[styles.tabBtn, activeTab === tab.key && styles.tabBtnActive]}
+            >
+              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
+                {tab.label}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+
+        {/* ── All Items tab ── */}
+        {activeTab === 'items' && (
+          <>
+            {hausItems.length > 0 && (
+              <View style={styles.filterRow}>
+                {FILTERS.map(f => (
+                  <Chip
+                    key={f.key}
+                    label={f.label}
+                    selected={filter === f.key}
+                    onPress={() => setFilter(f.key)}
+                  />
+                ))}
+              </View>
+            )}
+            {filteredItems.length === 0 ? (
+              <View style={styles.emptyWrap}>
+                <View style={styles.emptyCard}>
+                  <Text style={styles.emptyTitle}>NO ITEMS YET</Text>
+                  <Text style={styles.emptySubtitle}>
+                    Members haven't shared any pieces to this Haus yet.
+                  </Text>
+                </View>
+              </View>
+            ) : (
+              <View style={styles.itemGrid}>
+                {itemRows.map((row, ri) => (
+                  <View key={ri} style={styles.itemRow}>
+                    {row.map(item => (
+                      <View key={item.id} style={{ flex: 1 }}>
+                        <ItemCard
+                          item={item}
+                          onPress={() => navigation.navigate('ItemDetail', { item })}
+                        />
+                      </View>
+                    ))}
+                    {row.length === 1 && <View style={{ flex: 1 }} />}
+                  </View>
+                ))}
+              </View>
+            )}
+          </>
+        )}
+
+        {/* ── Collections tab ── */}
+        {activeTab === 'collections' && (
+          <HausCollectionsGrid
+            hausId={haus.id}
+            collections={collections}
+            onCollectionPress={c => navigation.navigate('CollectionDetail', { collectionId: c.id })}
+            onCreatePress={() => navigation.navigate('CreateCollection', { hausId: haus.id })}
           />
-        }
-        ListEmptyComponent={<EmptyState />}
-      />
+        )}
+
+        {/* ── Members tab ── */}
+        {activeTab === 'members' && (
+          <HausMembersList members={members} />
+        )}
+
+        <View style={{ height: 40 }} />
+      </ScrollView>
 
       {/* ── Invite Modal ── */}
       <Modal
@@ -186,7 +481,6 @@ export default function HausDetailScreen() {
         onRequestClose={() => setInviteVisible(false)}
       >
         <SafeAreaView style={modal.safe} edges={['top']}>
-          {/* Modal top bar */}
           <View style={modal.topBar}>
             <Text style={modal.title}>INVITE</Text>
             <Pressable onPress={() => setInviteVisible(false)} hitSlop={10}>
@@ -200,7 +494,6 @@ export default function HausDetailScreen() {
             keyboardShouldPersistTaps="handled"
             showsVerticalScrollIndicator={false}
           >
-            {/* Section: Add Members */}
             <View style={modal.sectionHeader}>
               <Text style={modal.sectionLabel}>ADD MEMBERS</Text>
             </View>
@@ -221,8 +514,7 @@ export default function HausDetailScreen() {
               </Pressable>
             </View>
 
-            {/* Member list */}
-            {members.map((m) => (
+            {members.map(m => (
               <View key={m.id} style={modal.memberRow}>
                 <View style={[modal.memberAvatar, m.isYou && modal.memberAvatarSelf]}>
                   <Text style={modal.memberInitials}>{m.initials}</Text>
@@ -243,7 +535,6 @@ export default function HausDetailScreen() {
               </View>
             ))}
 
-            {/* Section: Share Invite */}
             <View style={modal.sectionHeader}>
               <Text style={modal.sectionLabel}>SHARE INVITE</Text>
             </View>
@@ -261,7 +552,6 @@ export default function HausDetailScreen() {
               ))}
             </View>
 
-            {/* Invite link pill */}
             <View style={modal.linkPill}>
               <Text style={modal.linkText} numberOfLines={1}>{inviteLink}</Text>
               <Pressable onPress={handleCopyLink}>
@@ -269,7 +559,6 @@ export default function HausDetailScreen() {
               </Pressable>
             </View>
 
-            {/* Done button */}
             <Pressable style={modal.doneBtn} onPress={() => setInviteVisible(false)}>
               <Text style={modal.doneBtnText}>DONE</Text>
             </Pressable>
@@ -289,18 +578,15 @@ export default function HausDetailScreen() {
           onPress={() => !isLeaving && setLeaveVisible(false)}
         >
           <Pressable style={leaveModal.card} onPress={() => {}}>
-            {/* Icon */}
             <View style={leaveModal.iconWrap}>
               <Ionicons name="exit-outline" size={24} color="#C0392B" />
             </View>
-
             <Text style={leaveModal.title}>LEAVE HAUS?</Text>
             <Text style={leaveModal.body}>
               You'll be removed from{' '}
               <Text style={leaveModal.hausName}>{haus.name}</Text>
               {' '}and your shared pieces will no longer appear here.
             </Text>
-
             <View style={leaveModal.btnRow}>
               <Pressable
                 style={leaveModal.cancelBtn}
@@ -326,220 +612,68 @@ export default function HausDetailScreen() {
   );
 }
 
-// ─── Header ──────────────────────────────────────────────────────────────────
-
-type HausParam = RouteProp<AppStackParamList, 'HausDetail'>['params']['haus'];
-
-function Header({
-  haus, words, localName, isEditingName, nameInput,
-  onNamePress, onNameChange, onNameSave, onNameCancel,
-  totalCount, filteredCount, filter, onFilterChange, onBack, onInvite, onLeave,
-}: {
-  haus: HausParam; words: string[]; localName: string;
-  isEditingName: boolean; nameInput: string;
-  onNamePress: () => void; onNameChange: (v: string) => void;
-  onNameSave: () => void; onNameCancel: () => void;
-  totalCount: number; filteredCount: number;
-  filter: ItemFilter; onFilterChange: (f: ItemFilter) => void;
-  onBack: () => void; onInvite: () => void; onLeave: () => void;
-}) {
-  return (
-    <>
-      <View style={styles.topBar}>
-        <Pressable onPress={onBack} style={styles.backBtn}>
-          <Text style={styles.backText}>← BACK</Text>
-        </Pressable>
-      </View>
-
-      <View style={styles.heroCard}>
-        <View style={styles.avatarStack}>
-          {words.map((word, i) => (
-            <View
-              key={i}
-              style={[
-                styles.avatar,
-                { backgroundColor: i === 0 ? theme.colors.yellow : theme.colors.ivoryMid },
-                i > 0 && { marginLeft: -12 },
-              ]}
-            >
-              <Text style={styles.avatarInitial}>{getInitial(word)}</Text>
-            </View>
-          ))}
-        </View>
-
-        {isEditingName ? (
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-            <TextInput
-              value={nameInput}
-              onChangeText={onNameChange}
-              onSubmitEditing={onNameSave}
-              returnKeyType="done"
-              autoFocus
-              autoCapitalize="words"
-              style={[styles.hausName, {
-                flex: 1, borderBottomWidth: 1.5,
-                borderBottomColor: theme.colors.ink,
-                paddingVertical: 2,
-              }]}
-            />
-            <Pressable onPress={onNameSave} hitSlop={8}>
-              <Ionicons name="checkmark" size={20} color={theme.colors.ink} />
-            </Pressable>
-            <Pressable onPress={onNameCancel} hitSlop={8}>
-              <Ionicons name="close" size={20} color={theme.colors.muted} />
-            </Pressable>
-          </View>
-        ) : (
-          <Pressable onPress={onNamePress} style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
-            <Text style={styles.hausName}>{localName.toUpperCase()}</Text>
-            <Ionicons name="pencil-outline" size={18} color={theme.colors.muted} />
-          </Pressable>
-        )}
-
-        {haus.description ? (
-          <Text style={styles.description}>{haus.description}</Text>
-        ) : null}
-
-        <View style={styles.metaRow}>
-          <View style={styles.metaPill}>
-            <Text style={styles.metaValue}>{haus.member_count}</Text>
-            <Text style={styles.metaLabel}>MEMBERS</Text>
-          </View>
-          <View style={styles.metaDivider} />
-          <View style={styles.metaPill}>
-            <Text style={styles.metaValue}>{totalCount}</Text>
-            <Text style={styles.metaLabel}>PIECES</Text>
-          </View>
-        </View>
-
-        <View style={styles.actionRow}>
-          <Pressable style={styles.inviteBtn} onPress={onInvite}>
-            <Ionicons name="person-add-outline" size={14} color={theme.colors.yellowText} />
-            <Text style={styles.inviteBtnText}>INVITE FRIENDS</Text>
-          </Pressable>
-          <Pressable style={styles.leaveBtn} onPress={onLeave}>
-            <Ionicons name="exit-outline" size={14} color="#C0392B" />
-            <Text style={styles.leaveBtnText}>LEAVE HAUS</Text>
-          </Pressable>
-        </View>
-      </View>
-
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionLabel}>CLOSET</Text>
-        {totalCount > 0 && <Text style={styles.sectionCount}>{filteredCount} items</Text>}
-      </View>
-
-      {totalCount > 0 && (
-        <View style={styles.filterRow}>
-          {FILTERS.map((f) => (
-            <Chip
-              key={f.key}
-              label={f.label}
-              selected={filter === f.key}
-              onPress={() => onFilterChange(f.key)}
-            />
-          ))}
-        </View>
-      )}
-    </>
-  );
-}
-
-function EmptyState() {
-  return (
-    <View style={styles.emptyWrap}>
-      <View style={styles.emptyCard}>
-        <Text style={styles.emptyTitle}>NO ITEMS YET</Text>
-        <Text style={styles.emptySubtitle}>
-          Members haven't shared any pieces to this Haus yet.
-        </Text>
-      </View>
-    </View>
-  );
-}
-
-// ─── Styles ──────────────────────────────────────────────────────────────────
+// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const leaveModal = StyleSheet.create({
   overlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
     paddingHorizontal: 32,
   },
   card: {
-    width: '100%',
-    backgroundColor: theme.colors.ivory,
-    borderRadius: theme.borderRadius,
-    borderWidth: 1.5,
-    borderColor: theme.colors.ink,
-    padding: 24,
-    alignItems: 'center',
+    width: '100%', backgroundColor: theme.colors.ivory,
+    borderRadius: theme.borderRadius, borderWidth: 1.5,
+    borderColor: theme.colors.ink, padding: 24, alignItems: 'center',
   },
   iconWrap: {
     width: 48, height: 48, borderRadius: 24,
-    backgroundColor: '#FFF0EE',
-    borderWidth: 1.5, borderColor: '#C0392B',
-    alignItems: 'center', justifyContent: 'center',
-    marginBottom: 16,
+    backgroundColor: '#FFF0EE', borderWidth: 1.5, borderColor: '#C0392B',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   title: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 18, letterSpacing: 2,
-    color: theme.colors.ink, textTransform: 'uppercase',
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 18,
+    letterSpacing: 2, color: theme.colors.ink, textTransform: 'uppercase',
     marginBottom: 10,
   },
   body: {
-    fontFamily: theme.fonts.interLight,
-    fontSize: 13, color: theme.colors.muted,
-    textAlign: 'center', lineHeight: 20,
-    marginBottom: 24,
+    fontFamily: theme.fonts.interLight, fontSize: 13,
+    color: theme.colors.muted, textAlign: 'center',
+    lineHeight: 20, marginBottom: 24,
   },
-  hausName: {
-    fontFamily: theme.fonts.interSemiBold,
-    color: theme.colors.ink,
-  },
-  btnRow: {
-    flexDirection: 'row', gap: 10, width: '100%',
-  },
+  hausName: { fontFamily: theme.fonts.interSemiBold, color: theme.colors.ink },
+  btnRow: { flexDirection: 'row', gap: 10, width: '100%' },
   cancelBtn: {
     flex: 1, paddingVertical: 12, alignItems: 'center',
     borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
     borderRadius: theme.borderRadius,
   },
   cancelText: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 11, color: theme.colors.muted,
-    letterSpacing: 1, textTransform: 'uppercase',
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
+    color: theme.colors.muted, letterSpacing: 1, textTransform: 'uppercase',
   },
   leaveBtn: {
     flex: 1, paddingVertical: 12, alignItems: 'center',
-    backgroundColor: '#C0392B',
-    borderRadius: theme.borderRadius,
+    backgroundColor: '#C0392B', borderRadius: theme.borderRadius,
   },
   leaveBtnDisabled: { opacity: 0.5 },
   leaveText: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 11, color: '#FFFFFF',
-    letterSpacing: 1, textTransform: 'uppercase',
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
+    color: '#FFFFFF', letterSpacing: 1, textTransform: 'uppercase',
   },
 });
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.ivory },
-  listContent: { paddingBottom: 32 },
-  columnWrapper: { gap: 10, paddingHorizontal: theme.spacing.md, marginBottom: 10 },
+  scroll: { paddingBottom: 32 },
 
   topBar: { paddingHorizontal: theme.spacing.md, paddingVertical: 12 },
-  backBtn: {},
   backText: {
     fontFamily: theme.fonts.barlowBold, fontSize: 11,
     color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.5,
   },
 
   heroCard: {
-    marginHorizontal: theme.spacing.md, marginBottom: 20,
+    marginHorizontal: theme.spacing.md, marginBottom: 0,
     padding: 20, borderWidth: 1.5, borderColor: theme.colors.ink,
     borderRadius: theme.borderRadius, backgroundColor: theme.colors.ivory,
   },
@@ -561,10 +695,13 @@ const styles = StyleSheet.create({
   },
   metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 20 },
   metaPill: { alignItems: 'center' },
-  metaDivider: { width: 1, height: 24, backgroundColor: theme.colors.ivoryMid, marginHorizontal: 16 },
-  metaValue: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 20, color: theme.colors.ink },
+  metaDivider: {
+    width: 1, height: 24, backgroundColor: theme.colors.ivoryMid,
+    marginHorizontal: 12,
+  },
+  metaValue: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 18, color: theme.colors.ink },
   metaLabel: {
-    fontFamily: theme.fonts.barlowBold, fontSize: 9,
+    fontFamily: theme.fonts.barlowBold, fontSize: 8,
     color: theme.colors.muted, letterSpacing: 1.5,
     textTransform: 'uppercase', marginTop: 1,
   },
@@ -573,9 +710,8 @@ const styles = StyleSheet.create({
   inviteBtn: {
     flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 6, paddingVertical: 10,
-    backgroundColor: theme.colors.yellow,
-    borderWidth: 1.5, borderColor: theme.colors.yellowBorder,
-    borderRadius: theme.borderRadius,
+    backgroundColor: theme.colors.yellow, borderWidth: 1.5,
+    borderColor: theme.colors.yellowBorder, borderRadius: theme.borderRadius,
   },
   inviteBtnText: {
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
@@ -592,24 +728,33 @@ const styles = StyleSheet.create({
     color: '#C0392B', letterSpacing: 1, textTransform: 'uppercase',
   },
 
-  sectionHeader: {
-    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md, paddingVertical: 10,
-    borderTopWidth: 1, borderBottomWidth: 1, borderColor: theme.colors.ivoryMid,
-    backgroundColor: theme.colors.ivoryDark, marginBottom: 14,
+  // Tab bar
+  tabBar: {
+    flexDirection: 'row',
+    marginHorizontal: theme.spacing.md, marginTop: 14,
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, overflow: 'hidden',
   },
-  sectionLabel: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
-    color: theme.colors.ink, letterSpacing: 1.5, textTransform: 'uppercase',
+  tabBtn: {
+    flex: 1, paddingVertical: 10, alignItems: 'center',
+    backgroundColor: theme.colors.ivory,
   },
-  sectionCount: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted },
+  tabBtnActive: { backgroundColor: theme.colors.ink },
+  tabLabel: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9.5,
+    letterSpacing: 0.8, color: theme.colors.muted, textTransform: 'uppercase',
+  },
+  tabLabelActive: { color: theme.colors.ivory },
 
+  // Items tab
   filterRow: {
     flexDirection: 'row', gap: 8,
     paddingHorizontal: theme.spacing.md, paddingVertical: 12,
   },
+  itemGrid: { paddingHorizontal: theme.spacing.md, gap: 10 },
+  itemRow: { flexDirection: 'row', gap: 10 },
 
-  emptyWrap: { paddingHorizontal: theme.spacing.md, paddingTop: 8 },
+  emptyWrap: { paddingHorizontal: theme.spacing.md, paddingTop: 16 },
   emptyCard: {
     borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
     borderStyle: 'dashed', borderRadius: theme.borderRadius,
@@ -626,6 +771,81 @@ const styles = StyleSheet.create({
   },
 });
 
+const coll = StyleSheet.create({
+  wrapper: { paddingHorizontal: theme.spacing.md, paddingTop: 14, gap: 10 },
+  row: { flexDirection: 'row', gap: 10 },
+
+  newCard: {
+    flex: 1, aspectRatio: 1,
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderStyle: 'dashed', borderRadius: theme.borderRadius,
+    alignItems: 'center', justifyContent: 'center', gap: 6,
+    backgroundColor: theme.colors.ivory,
+  },
+  newCardText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    color: theme.colors.muted, letterSpacing: 1, textTransform: 'uppercase',
+  },
+
+  card: {
+    flex: 1,
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius, overflow: 'hidden',
+    backgroundColor: theme.colors.ivory,
+  },
+  thumbRow: { flexDirection: 'row' },
+  thumb: {
+    flex: 1, aspectRatio: 1,
+    alignItems: 'center', justifyContent: 'center',
+    borderRightWidth: 0.5, borderColor: theme.colors.ink,
+  },
+  cardBody: {
+    paddingVertical: 8, paddingHorizontal: 10,
+    borderTopWidth: 1, borderTopColor: theme.colors.ink,
+  },
+  cardName: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10.5,
+    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.4,
+  },
+  cardCount: {
+    fontFamily: theme.fonts.interLight, fontSize: 10,
+    color: theme.colors.muted, marginTop: 1,
+  },
+
+  emptyWrap: { paddingTop: 12 },
+  emptyText: {
+    fontFamily: theme.fonts.interLight, fontSize: 12,
+    color: theme.colors.muted, textAlign: 'center', lineHeight: 18,
+  },
+});
+
+const mem = StyleSheet.create({
+  row: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: theme.spacing.md, paddingVertical: 12,
+    borderBottomWidth: 0.5, borderBottomColor: theme.colors.ivoryMid,
+    gap: 12,
+  },
+  avatar: {
+    width: 38, height: 38, borderRadius: 19,
+    backgroundColor: theme.colors.ivoryMid,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  avatarSelf: { backgroundColor: theme.colors.yellow },
+  initials: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 12, color: theme.colors.ink },
+  name: { fontFamily: theme.fonts.interSemiBold, fontSize: 13, color: theme.colors.ink },
+  handle: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted, marginTop: 1 },
+  youBadge: {
+    backgroundColor: theme.colors.yellow, borderWidth: 1.5,
+    borderColor: theme.colors.yellowBorder, borderRadius: theme.borderRadius,
+    paddingHorizontal: 8, paddingVertical: 2,
+  },
+  youBadgeText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 8,
+    color: theme.colors.yellowText, letterSpacing: 1,
+  },
+});
+
 const modal = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.ivory },
   topBar: {
@@ -637,7 +857,6 @@ const modal = StyleSheet.create({
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 20,
     letterSpacing: 0.6, textTransform: 'uppercase', color: theme.colors.ink,
   },
-
   scroll: { flex: 1 },
   scrollContent: { paddingBottom: 48 },
 

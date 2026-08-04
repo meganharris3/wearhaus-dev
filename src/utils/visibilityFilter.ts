@@ -29,10 +29,11 @@ export function getVisibleItems(items: Item[], currentUser: CurrentUser): Item[]
     }
 
     if (vis === 'hauses') {
-      const sharedHauses = Object.entries(item.haus_visibility ?? {})
-        .filter(([, on]) => on)
-        .map(([id]) => id);
-      return sharedHauses.some((id) => hausIds.has(id));
+      return item.owner?.id ? hausIds.has(item.owner.id) : false;
+    }
+
+    if (vis === 'private') {
+      return false;
     }
 
     return false;

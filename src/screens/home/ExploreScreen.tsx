@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import {
   View,
   Text,
@@ -6,6 +6,7 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, CompositeNavigationProp } from '@react-navigation/native';
@@ -19,18 +20,8 @@ import { useFriends } from '../../context/FriendsContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
 import { getVisibleItems } from '../../utils/visibilityFilter';
+import { fetchFeedItems, searchItems } from '../../services/itemService';
 import type { Item } from '../../types';
-
-const MOCK_ITEMS: Item[] = [
-  { id: '1', name: 'Ribbed Cami Mini Dress', owner_id: '1', category: 'dress', size_label: 'XS/S', price_per_day: 800, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1726837214001-e1361c51732e?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Date Night', 'Going Out'] },
-  { id: '2', name: 'Plaid Micro Mini Skirt', owner_id: '1', category: 'skirt', size_label: 'XS/S', price_per_day: 500, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1570700006701-4bdeaf669738?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Festival', 'Casual'] },
-  { id: '3', name: 'Mesh Cut-Out Mini Dress', owner_id: '2', category: 'dress', size_label: 'S', price_per_day: 600, status: 'available', location_label: '0.1 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1671632777039-b6434382259d?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Date Night', 'Going Out'] },
-  { id: '4', name: 'Lace Corset Top', owner_id: '1', category: 'top', size_label: 'XS', price_per_day: 700, status: 'available', location_label: '0.3 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1664875849333-798c9e0eaa62?w=400', owner: { id: '1', display_name: 'Maya Chen' }, occasion_tags: ['Date Night', 'Formal'] },
-  { id: '5', name: 'Satin Slip Mini Skirt', owner_id: '2', category: 'skirt', size_label: 'S', price_per_day: 900, status: 'available', location_label: '1.2 mi · Columbia', photo_url: 'https://images.unsplash.com/photo-1608033247410-817c68700611?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Date Night', 'Formal'] },
-  { id: '6', name: 'Ruched Bodycon Mini', owner_id: '3', category: 'dress', size_label: 'XS/S', price_per_day: 1000, status: 'available', location_label: '0.5 mi · NYU Stern', photo_url: 'https://images.unsplash.com/photo-1687832783432-e1d9a2f76876?w=400', owner: { id: '3', display_name: 'Priya Patel' }, occasion_tags: ['Going Out', 'Formal'] },
-  { id: '7', name: 'Crochet Crop Top', owner_id: '3', category: 'top', size_label: 'XS/S', price_per_day: 400, status: 'available', location_label: '0.5 mi · NYU Stern', photo_url: 'https://images.unsplash.com/photo-1742642277612-b6bfbcc1d946?w=400', owner: { id: '3', display_name: 'Priya Patel' }, occasion_tags: ['Festival', 'Casual'] },
-  { id: '8', name: 'Low-Rise Flare Jeans', owner_id: '2', category: 'pants', size_label: '25', price_per_day: 600, status: 'available', location_label: '0.1 mi · NYU', photo_url: 'https://images.unsplash.com/photo-1689371953420-b6981e43fa38?w=400', owner: { id: '2', display_name: 'Jordan Reyes' }, occasion_tags: ['Casual', 'Festival'] },
-];
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AppTabsParamList } from '../../navigation/AppTabs';
 
@@ -41,31 +32,14 @@ type ExploreNavProp = CompositeNavigationProp<
   NavigationProp<AppStackParamList>
 >;
 
-const TABS = ['All', 'Date Night', 'Festival', 'Formal', 'Casual'];
-
-type FilterKey = 'size' | 'color' | 'style' | 'event' | 'price';
+type FilterKey = 'size' | 'color' | 'style' | 'price';
 
 const FILTER_CHIPS: { key: FilterKey; label: string }[] = [
   { key: 'size',  label: 'Size'  },
   { key: 'color', label: 'Color' },
   { key: 'style', label: 'Style' },
-  { key: 'event', label: 'Event' },
   { key: 'price', label: 'Price' },
 ];
-
-function matchesOccasion(item: Item, occasions: string[]): boolean {
-  if (item.occasion_tags?.some((t) => occasions.includes(t))) return true;
-  const n = item.name.toLowerCase();
-  const cat = item.category.toLowerCase();
-  return occasions.some((e) => {
-    if (e === 'Date Night') return n.includes('slip') || n.includes('silk') || n.includes('velvet') || n.includes('sequin') || n.includes('lace') || n.includes('satin');
-    if (e === 'Festival')   return n.includes('festival') || n.includes('boot') || n.includes('cowboy') || n.includes('crochet') || n.includes('plaid');
-    if (e === 'Formal')     return cat === 'dress' || n.includes('gown') || n.includes('blazer') || n.includes('suit');
-    if (e === 'Casual')     return cat === 'top' || cat === 'pants' || n.includes('jeans');
-    if (e === 'Going Out')  return n.includes('sequin') || n.includes('mini') || n.includes('velvet') || n.includes('slip') || n.includes('bodycon');
-    return false;
-  });
-}
 
 const COLOR_PALETTE: { name: string; hex: string }[] = [
   { name: 'Black',   hex: '#1A1A1A' },
@@ -92,7 +66,6 @@ const FILTER_OPTIONS: Record<FilterKey, string[]> = {
   size:  ['XS', 'S', 'M', 'L', 'XL', 'One Size'],
   color: COLOR_PALETTE.map((c) => c.name),
   style: ['Dresses', 'Outerwear', 'Tops', 'Bottoms', 'Shoes', 'Accessories'],
-  event: ['Date Night', 'Festival', 'Formal', 'Casual', 'Going Out'],
   price: ['Under $5/day', '$5–$10/day', '$10–$15/day', '$15+/day'],
 };
 
@@ -203,13 +176,35 @@ export default function ExploreScreen() {
   const { user } = useAuth();
   const { friends } = useFriends();
   const { hauses } = useHauses();
-  const [activeTab, setActiveTab]     = useState('All');
   const [searchQuery, setSearchQuery] = useState('');
   const [audience, setAudience]       = useState<AudienceFilter>('all');
   const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
   const [filters, setFilters] = useState<Record<FilterKey, string[]>>({
-    size: [], color: [], style: [], event: [], price: [],
+    size: [], color: [], style: [], price: [],
   });
+  const [feedItems, setFeedItems]     = useState<Item[]>([]);
+  const [feedLoading, setFeedLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchFeedItems()
+      .then((items) => { if (!cancelled) setFeedItems(items); })
+      .catch(() => {})
+      .finally(() => { if (!cancelled) setFeedLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (!searchQuery.trim()) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const items = await searchItems({ query: searchQuery.trim() });
+        if (!cancelled) setFeedItems(items);
+      } catch {}
+    }, 350);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [searchQuery]);
 
   const toggleFilterOption = useCallback((key: FilterKey, value: string) => {
     setFilters((prev) => {
@@ -230,7 +225,7 @@ export default function ExploreScreen() {
 
   const displayItems = useMemo(() => {
     const currentUser = { id: user?.id ?? '', friends, hauses };
-    let items = getVisibleItems(MOCK_ITEMS, currentUser).filter(
+    let items = getVisibleItems(feedItems, currentUser).filter(
       (i) => i.status === 'available',
     );
 
@@ -303,16 +298,8 @@ export default function ExploreScreen() {
       );
     }
 
-    if (filters.event.length > 0) {
-      items = items.filter((i) => matchesOccasion(i, filters.event));
-    }
-
-    if (activeTab !== 'All') {
-      items = items.filter((i) => matchesOccasion(i, [activeTab]));
-    }
-
     return items;
-  }, [audience, activeTab, user?.id, friends, hauses, friendIds, hausIds, filters]);
+  }, [feedItems, audience, user?.id, friends, hauses, friendIds, hausIds, filters]);
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
@@ -344,32 +331,16 @@ export default function ExploreScreen() {
           <>
             <Masthead />
 
-            <View style={styles.audienceRow}>
-              <Pressable
-                style={[styles.audienceTag, audience === 'friends' && styles.audienceTagFriends]}
-                onPress={() => setAudience((p) => p === 'friends' ? 'all' : 'friends')}
-              >
-                <Ionicons name="people-outline" size={12} color={audience === 'friends' ? '#3A3A00' : theme.colors.muted} />
-                <Text style={[styles.audienceTagText, audience === 'friends' && styles.audienceTagTextFriends]}>FRIENDS</Text>
-              </Pressable>
-              <Pressable
-                style={[styles.audienceTag, audience === 'hauses' && styles.audienceTagHauses]}
-                onPress={() => setAudience((p) => p === 'hauses' ? 'all' : 'hauses')}
-              >
-                <Ionicons name="home-outline" size={12} color={audience === 'hauses' ? '#3A3A00' : theme.colors.muted} />
-                <Text style={[styles.audienceTagText, audience === 'hauses' && styles.audienceTagTextHauses]}>HAUSES</Text>
-              </Pressable>
-            </View>
-
             <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.tabsContent} style={styles.tabsScroll}>
-              {TABS.map((tab) => {
-                const isActive = activeTab === tab;
-                return (
-                  <Pressable key={tab} onPress={() => setActiveTab(tab)} style={[styles.pill, isActive && styles.pillActive]}>
-                    <Text style={[styles.pillText, isActive && styles.pillTextActive]}>{tab.toUpperCase()}</Text>
-                  </Pressable>
-                );
-              })}
+              {([
+                { label: 'All',     value: 'all'     },
+                { label: 'Friends', value: 'friends' },
+                { label: 'Hauses',  value: 'hauses'  },
+              ] as { label: string; value: AudienceFilter }[]).map(({ label, value }) => (
+                <Pressable key={value} onPress={() => setAudience(value)} style={[styles.pill, audience === value && styles.pillActive]}>
+                  <Text style={[styles.pillText, audience === value && styles.pillTextActive]}>{label.toUpperCase()}</Text>
+                </Pressable>
+              ))}
             </ScrollView>
 
             <SearchBar value={searchQuery} onChangeText={setSearchQuery} placeholder="Search size, style, occasion…" />
@@ -409,6 +380,11 @@ export default function ExploreScreen() {
             </View>
           </>
         }
+        ListEmptyComponent={
+          feedLoading ? (
+            <ActivityIndicator style={{ marginTop: 32 }} color={theme.colors.ink} />
+          ) : undefined
+        }
       />
     </SafeAreaView>
   );
@@ -421,7 +397,7 @@ const styles = StyleSheet.create({
 
   chipsScroll: { marginBottom: 2 },
   chipsContent: { paddingHorizontal: theme.spacing.md, paddingVertical: 6, gap: 8 },
-  chip: { borderWidth: 1.5, borderColor: theme.colors.ink, borderRadius: theme.borderRadius, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.colors.ivory },
+  chip: { borderWidth: 1.5, borderColor: theme.colors.ink, borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.colors.ivory },
   chipActive: { backgroundColor: '#FFFFAD', borderColor: '#C8C820' },
   chipText: { fontFamily: theme.fonts.barlowBold, fontSize: 10, color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.5 },
   chipTextActive: { color: '#3A3A00' },

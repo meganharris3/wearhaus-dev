@@ -4,10 +4,6 @@ import { useAuth } from './AuthContext';
 import { fetchMyHauses, createHaus as createHausRemote, leaveHaus as leaveHausRemote, updateHaus as updateHausRemote } from '../services/hausService';
 import type { Haus } from '../types';
 
-const SEED_HAUSES: Haus[] = [
-  { id: '1', name: 'NYU Village Collective', member_count: 2, piece_count: 5, description: 'Lower Manhattan students.' },
-  { id: '2', name: 'Uptown Closet',          member_count: 1, piece_count: 3, description: 'Columbia and Barnard students.' },
-];
 
 function storageKey(userId: string | undefined) {
   return userId ? `hauses_${userId}` : 'hauses_guest';
@@ -35,20 +31,16 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
     async function load() {
       setLoading(true);
       try {
-        // Prefer Supabase if logged in
         if (user?.id) {
+          await AsyncStorage.removeItem(key).catch(() => {});
           const remote = await fetchMyHauses(user.id).catch(() => null);
-          if (!cancelled && remote && remote.length > 0) {
-            setHauses(remote);
-            await AsyncStorage.setItem(key, JSON.stringify(remote)).catch(() => {});
-            return;
-          }
+          if (!cancelled) setHauses(remote ?? []);
+        } else {
+          const raw = await AsyncStorage.getItem(key);
+          if (!cancelled) setHauses(raw ? (JSON.parse(raw) as Haus[]) : []);
         }
-        // Fall back to AsyncStorage cache
-        const raw = await AsyncStorage.getItem(key);
-        if (!cancelled) setHauses(raw ? (JSON.parse(raw) as Haus[]) : [...SEED_HAUSES]);
       } catch {
-        if (!cancelled) setHauses([...SEED_HAUSES]);
+        if (!cancelled) setHauses([]);
       } finally {
         if (!cancelled) setLoading(false);
       }

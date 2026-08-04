@@ -4,6 +4,7 @@ import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
 import { useFonts, Barlow_700Bold, Barlow_800ExtraBold } from '@expo-google-fonts/barlow';
 import { Inter_300Light, Inter_400Regular, Inter_600SemiBold } from '@expo-google-fonts/inter';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
 
@@ -29,12 +30,14 @@ export default function App() {
   }
 
   return (
-    <View style={styles.root} onLayout={onLayoutRootView}>
-      <StatusBar style="dark" backgroundColor="#FDFBF4" />
-      <AuthProvider>
-        <RootNavigator />
-      </AuthProvider>
-    </View>
+    <SafeAreaProvider>
+      <View style={styles.root} onLayout={onLayoutRootView}>
+        <StatusBar style="dark" backgroundColor="#FDFBF4" />
+        <AuthProvider>
+          <RootNavigator />
+        </AuthProvider>
+      </View>
+    </SafeAreaProvider>
   );
 }
 

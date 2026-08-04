@@ -31,7 +31,7 @@ export default function NotificationBell({ color }: { color?: string } = {}) {
 const styles = StyleSheet.create({
   btn: {
     width: 38, height: 38,
-    borderWidth: 2,
+    borderWidth: 1,
     borderRadius: theme.borderRadius,
     alignItems: 'center', justifyContent: 'center',
   },

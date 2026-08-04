@@ -3,21 +3,30 @@ import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { VisibilityMode } from '../types';
 
+type Option = { key: VisibilityMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] };
+
+const ITEM_OPTIONS: Option[] = [
+  { key: 'public',  label: 'Public',  icon: 'globe-outline'      },
+  { key: 'hauses',  label: 'Hauses',  icon: 'home-outline'       },
+  { key: 'friends', label: 'Friends', icon: 'people-outline'     },
+];
+
+export const BOARD_OPTIONS: Option[] = [
+  { key: 'public',  label: 'Public',  icon: 'globe-outline'      },
+  { key: 'friends', label: 'Friends', icon: 'people-outline'     },
+  { key: 'private', label: 'Private', icon: 'lock-closed-outline'},
+];
+
 interface VisibilityToggleProps {
   value: VisibilityMode;
   onChange: (v: VisibilityMode) => void;
+  options?: Option[];
 }
 
-const OPTIONS: { key: VisibilityMode; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
-  { key: 'public',  label: 'Public',  icon: 'globe-outline'  },
-  { key: 'friends', label: 'Friends', icon: 'people-outline' },
-  { key: 'hauses',  label: 'Hauses',  icon: 'home-outline'   },
-];
-
-export default function VisibilityToggle({ value, onChange }: VisibilityToggleProps) {
+export default function VisibilityToggle({ value, onChange, options = ITEM_OPTIONS }: VisibilityToggleProps) {
   return (
     <View style={styles.container}>
-      {OPTIONS.map((opt, idx) => {
+      {options.map((opt, idx) => {
         const active = value === opt.key;
         return (
           <Pressable
@@ -26,7 +35,7 @@ export default function VisibilityToggle({ value, onChange }: VisibilityTogglePr
             style={[
               styles.segment,
               active && styles.segmentActive,
-              idx < OPTIONS.length - 1 && styles.segmentBorder,
+              idx < options.length - 1 && styles.segmentBorder,
             ]}
           >
             <Ionicons

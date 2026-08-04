@@ -1,7 +1,6 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from './AuthContext';
-import { CLOSET_SEED_ITEMS } from '../data/mockClosetItems';
 import { fetchMyItems, insertItem, updateItem as updateItemRemote, deleteItem as deleteItemRemote } from '../services/itemService';
 import type { Item } from '../types';
 
@@ -33,20 +32,18 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
     async function load() {
       setLoading(true);
       try {
-        // Prefer Supabase if logged in
         if (user?.id) {
+          // Logged-in users always get their real Supabase items — never seed/cache data.
+          // Clear any stale AsyncStorage cache that might contain old mock items.
+          await AsyncStorage.removeItem(key).catch(() => {});
           const remote = await fetchMyItems(user.id, 'All').catch(() => null);
-          if (!cancelled && remote && remote.length > 0) {
-            setItems(remote);
-            await AsyncStorage.setItem(key, JSON.stringify(remote)).catch(() => {});
-            return;
-          }
+          if (!cancelled) setItems(remote ?? []);
+        } else {
+          const raw = await AsyncStorage.getItem(key);
+          if (!cancelled) setItems(raw ? (JSON.parse(raw) as Item[]) : []);
         }
-        // Fall back to AsyncStorage cache
-        const raw = await AsyncStorage.getItem(key);
-        if (!cancelled) setItems(raw ? (JSON.parse(raw) as Item[]) : [...CLOSET_SEED_ITEMS]);
       } catch {
-        if (!cancelled) setItems([...CLOSET_SEED_ITEMS]);
+        if (!cancelled) setItems([]);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -111,7 +108,7 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
 
   async function deleteItem(id: string) {
     if (user?.id) {
-      try { await deleteItemRemote(id); } catch { /* keep local removal */ }
+      await deleteItemRemote(id);
     }
     const newItems = items.filter((i) => i.id !== id);
     setItems(newItems);

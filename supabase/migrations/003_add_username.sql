@@ -6,8 +6,9 @@
 alter table public.users
   add column if not exists username text unique;
 
--- Expose username on the public-safe profile view
-create or replace view public.user_profiles as
+-- Recreate view: CREATE OR REPLACE can't insert a column mid-list, must drop first
+drop view if exists public.user_profiles;
+create view public.user_profiles as
   select
     id,
     display_name,

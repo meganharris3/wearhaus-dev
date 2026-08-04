@@ -1,12 +1,6 @@
 import React, { createContext, useContext, useState } from 'react';
 import type { Board } from '../types';
 
-const MOCK_BOARDS: Board[] = [
-  { id: 'b1', name: 'Going Out', visibility: 'public',  coverStyle: 'mosaic', itemIds: ['1','2','3','4'], createdAt: '2026-06-01T00:00:00Z', ownerId: 'me' },
-  { id: 'b2', name: 'Formal',    visibility: 'public',  coverStyle: 'mosaic', itemIds: ['4','6','8'],     createdAt: '2026-06-02T00:00:00Z', ownerId: 'me' },
-  { id: 'b3', name: 'Cozy',      visibility: 'friends', coverStyle: 'stack',  itemIds: ['7','3'],         createdAt: '2026-06-03T00:00:00Z', ownerId: 'me' },
-];
-
 interface BoardsContextValue {
   boards: Board[];
   addBoard: (board: Board) => void;
@@ -20,7 +14,7 @@ interface BoardsContextValue {
 const BoardsContext = createContext<BoardsContextValue | null>(null);
 
 export function BoardsProvider({ children }: { children: React.ReactNode }) {
-  const [boards, setBoards] = useState<Board[]>(MOCK_BOARDS);
+  const [boards, setBoards] = useState<Board[]>([]);
 
   function addBoard(board: Board) {
     setBoards((prev) => [board, ...prev]);

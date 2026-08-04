@@ -1,13 +1,19 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { theme } from '../theme';
 import NotificationBell from './NotificationBell';
+import MessagesIcon from './MessagesIcon';
+import type { AppStackParamList } from '../navigation/AppStack';
 
 interface MastheadProps {
   subtitle?: string;
 }
 
 export default function Masthead({ subtitle }: MastheadProps) {
+  const navigation = useNavigation<NavigationProp<AppStackParamList>>();
+
   return (
     <View style={styles.container}>
       <View style={styles.row}>
@@ -17,7 +23,17 @@ export default function Masthead({ subtitle }: MastheadProps) {
           <Text style={styles.haus}> HAUS</Text>
         </Text>
 
-        <NotificationBell />
+        <View style={styles.actions}>
+          <Pressable
+            style={styles.actionBtn}
+            onPress={() => navigation.navigate('Friends')}
+            hitSlop={6}
+          >
+            <Ionicons name="person-add-outline" size={18} color={theme.colors.ink} />
+          </Pressable>
+          <MessagesIcon />
+          <NotificationBell />
+        </View>
       </View>
 
       {subtitle ? (
@@ -38,6 +54,20 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+  },
+  actions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  actionBtn: {
+    width: 38,
+    height: 38,
+    borderWidth: 1,
+    borderColor: theme.colors.ink,
+    borderRadius: theme.borderRadius,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   wordmark: {
     fontFamily: theme.fonts.barlowExtraBold,

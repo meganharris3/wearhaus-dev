@@ -18,6 +18,8 @@ interface MessagesContextValue {
     otherUser: ThreadParticipant;
     payload: BorrowRequestPayload;
   }) => Thread;
+  findThreadByUser: (userId: string) => Thread | undefined;
+  createDirectThread: (otherUser: ThreadParticipant, item?: Item) => Thread;
   markRead: (threadId: string) => void;
   sendMessage: (threadId: string, msg: Omit<ChatMessage, 'id' | 'threadId'>) => void;
   updateRequestStatus: (
@@ -29,202 +31,13 @@ interface MessagesContextValue {
 
 const MessagesContext = createContext<MessagesContextValue | null>(null);
 
-// ─── Mock Data ─────────────────────────────────────────────────────────────────
-
-const INITIAL_THREADS: Thread[] = [
-  {
-    id: 't1',
-    otherUser: { id: 'u10', name: 'Priya Patel', handle: 'priyap', initials: 'PP', avatarColor: '#F0EDE0' },
-    item: {
-      id: 'i1',
-      owner_id: 'me',
-      name: 'Silk Slip Dress',
-      size_label: 'S',
-      price_per_day: 1400,
-      status: 'available',
-      location_label: '0.3 mi · NYU',
-      category: 'dress',
-    },
-    status: 'pending_request',
-    unread: true,
-    lastMessage: 'Sent a borrow request',
-    lastMessageTime: '2m ago',
-    messages: [
-      {
-        id: 'm1',
-        threadId: 't1',
-        type: 'system',
-        senderId: 'system',
-        text: 'Priya Patel sent a borrow request',
-        timestamp: '2m ago',
-      },
-      {
-        id: 'm2',
-        threadId: 't1',
-        type: 'borrow_request',
-        senderId: 'u10',
-        payload: {
-          dates: { start: 'Jun 25', end: 'Jun 28' },
-          duration: 4,
-          pricePerDay: 1400,
-          pickup: 'Campus Pickup',
-          total: 6776,
-          status: 'pending',
-        },
-        timestamp: '2m ago',
-      },
-    ],
-  },
-  {
-    id: 't2',
-    otherUser: { id: 'u11', name: 'Maya Chen', handle: 'mayac', initials: 'MC', avatarColor: '#FFFFAD' },
-    item: {
-      id: 'i2',
-      owner_id: 'u11',
-      name: 'Black Blazer',
-      size_label: 'M',
-      price_per_day: 500,
-      status: 'available',
-      location_label: '0.5 mi · NYU',
-      category: 'jacket',
-    },
-    status: 'counter_sent',
-    unread: false,
-    lastMessage: 'Counter offer sent',
-    lastMessageTime: '1h ago',
-    messages: [
-      {
-        id: 'm3',
-        threadId: 't2',
-        type: 'system',
-        senderId: 'system',
-        text: 'You sent a borrow request',
-        timestamp: '2h ago',
-      },
-      {
-        id: 'm4',
-        threadId: 't2',
-        type: 'borrow_request',
-        senderId: 'me',
-        payload: {
-          dates: { start: 'Jul 1', end: 'Jul 3' },
-          duration: 3,
-          pricePerDay: 500,
-          pickup: 'Campus Pickup',
-          total: 1820,
-          status: 'countered',
-        },
-        timestamp: '2h ago',
-      },
-      {
-        id: 'm5',
-        threadId: 't2',
-        type: 'counter_offer',
-        senderId: 'u11',
-        payload: {
-          pricePerDay: 400,
-          dates: { start: 'Jul 1', end: 'Jul 3' },
-          note: 'Happy to do $4/day!',
-        },
-        timestamp: '1h ago',
-      },
-    ],
-  },
-  {
-    id: 't3',
-    otherUser: { id: 'u12', name: 'Jade Kim', handle: 'jadek', initials: 'JK', avatarColor: '#F0EDE0' },
-    item: {
-      id: 'i3',
-      owner_id: 'u12',
-      name: 'Linen Jumpsuit',
-      size_label: 'S',
-      price_per_day: 900,
-      status: 'lent',
-      location_label: '1.2 mi · Columbia',
-      category: 'other',
-    },
-    status: 'active_rental',
-    unread: false,
-    lastMessage: 'Rental confirmed ✓',
-    lastMessageTime: 'Jun 20',
-    messages: [
-      {
-        id: 'm6',
-        threadId: 't3',
-        type: 'system',
-        senderId: 'system',
-        text: 'You sent a borrow request',
-        timestamp: 'Jun 19',
-      },
-      {
-        id: 'm7',
-        threadId: 't3',
-        type: 'borrow_request',
-        senderId: 'me',
-        payload: {
-          dates: { start: 'Jun 20', end: 'Jun 22' },
-          duration: 3,
-          pricePerDay: 900,
-          pickup: 'Campus Pickup',
-          total: 3213,
-          status: 'accepted',
-        },
-        timestamp: 'Jun 19',
-      },
-      {
-        id: 'm8',
-        threadId: 't3',
-        type: 'confirmed',
-        senderId: 'system',
-        payload: {
-          dates: { start: 'Jun 20', end: 'Jun 22' },
-          duration: 3,
-          pricePerDay: 900,
-          pickup: 'Campus Pickup',
-          total: 3213,
-          status: 'accepted',
-        },
-        timestamp: 'Jun 20',
-      },
-    ],
-  },
-  {
-    id: 't4',
-    otherUser: { id: 'u13', name: 'Sofia Torres', handle: 'sofiat', initials: 'ST', avatarColor: '#E2DED0' },
-    item: {
-      id: 'i4',
-      owner_id: 'u13',
-      name: 'Floral Midi Dress',
-      size_label: 'XS',
-      price_per_day: 1200,
-      status: 'available',
-      location_label: '0.8 mi · NYU',
-      category: 'dress',
-    },
-    status: 'completed',
-    unread: false,
-    lastMessage: 'Hope you enjoyed it!',
-    lastMessageTime: 'Jun 10',
-    messages: [
-      {
-        id: 'm9',
-        threadId: 't4',
-        type: 'text',
-        senderId: 'u13',
-        text: 'Hope you enjoyed it!',
-        timestamp: 'Jun 10',
-      },
-    ],
-  },
-];
-
 // ─── Provider ──────────────────────────────────────────────────────────────────
 
 let nextThreadId = 100;
 let nextMessageId = 100;
 
 export function MessagesProvider({ children }: { children: React.ReactNode }) {
-  const [threads, setThreads] = useState<Thread[]>(INITIAL_THREADS);
+  const [threads, setThreads] = useState<Thread[]>([]);
 
   const unreadCount = threads.filter((t) => t.unread).length;
 
@@ -264,6 +77,26 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
           timestamp: 'Just now',
         },
       ],
+    };
+    setThreads((prev) => [newThread, ...prev]);
+    return newThread;
+  }
+
+  function findThreadByUser(userId: string): Thread | undefined {
+    return threads.find((t) => t.otherUser.id === userId);
+  }
+
+  function createDirectThread(otherUser: ThreadParticipant, item?: Item): Thread {
+    const threadId = `t${++nextThreadId}`;
+    const newThread: Thread = {
+      id: threadId,
+      otherUser,
+      item,
+      status: 'direct',
+      unread: false,
+      lastMessage: '',
+      lastMessageTime: 'Just now',
+      messages: [],
     };
     setThreads((prev) => [newThread, ...prev]);
     return newThread;
@@ -323,6 +156,8 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         unreadCount,
         getThread,
         createThread,
+        findThreadByUser,
+        createDirectThread,
         markRead,
         sendMessage,
         updateRequestStatus,

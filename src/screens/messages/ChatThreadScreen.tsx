@@ -9,7 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
-import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread } from '../../types';
+import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread, Item } from '../../types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ChatThread'>;
 
@@ -51,7 +51,7 @@ function BorrowRequestCard({
   updateRequestStatus: (threadId: string, messageId: string, status: BorrowRequestPayload['status']) => void;
 }) {
   const payload = msg.payload as BorrowRequestPayload;
-  const isLender = thread.item.owner_id === CURRENT_USER;
+  const isLender = thread?.item?.owner_id === CURRENT_USER;
   const isMine = msg.senderId === CURRENT_USER;
 
   return (
@@ -197,6 +197,26 @@ function CounterOfferCard({
   );
 }
 
+function ItemMentionCard({ item }: { item: Item }) {
+  return (
+    <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
+      <View style={styles.itemMentionCard}>
+        <Text style={styles.itemMentionLabel}>ASKING ABOUT</Text>
+        <View style={styles.itemMentionBody}>
+          <View style={styles.itemMentionThumb} />
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemMentionName}>{item.name.toUpperCase()}</Text>
+            <Text style={styles.itemMentionMeta}>
+              {item.size_label} · ${(item.price_per_day / 100).toFixed(2)}/day
+            </Text>
+          </View>
+        </View>
+      </View>
+      <Text style={styles.timestamp}>Just now</Text>
+    </View>
+  );
+}
+
 function StatusPill({ status }: { status: BorrowRequestPayload['status'] }) {
   const configs: Record<BorrowRequestPayload['status'], { label: string; bg: string; text: string }> = {
     pending:   { label: 'PENDING',   bg: '#FFFFAD', text: '#3A3A00' },
@@ -215,17 +235,22 @@ function StatusPill({ status }: { status: BorrowRequestPayload['status'] }) {
 // ─── Main Screen ──────────────────────────────────────────────────────────────
 
 export default function ChatThreadScreen({ route, navigation }: Props) {
-  const { threadId } = route.params;
-  const { getThread, markRead, sendMessage, updateRequestStatus } = useMessages();
+  const { threadId: initialThreadId, pendingItem, pendingOtherUser } = route.params;
+  const { getThread, markRead, sendMessage, updateRequestStatus, createDirectThread } = useMessages();
   const [inputText, setInputText] = useState('');
+  const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId);
 
-  const threadOrUndef = getThread(threadId);
+  const thread = activeThreadId ? getThread(activeThreadId) : undefined;
+  const isNewThread = !thread;
+
+  const displayItem = thread?.item ?? pendingItem;
+  const displayOtherUser = thread?.otherUser ?? pendingOtherUser;
 
   useEffect(() => {
-    markRead(threadId);
-  }, [threadId]);
+    if (activeThreadId) markRead(activeThreadId);
+  }, [activeThreadId]);
 
-  if (!threadOrUndef) {
+  if (!displayOtherUser) {
     return (
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.ivory }} edges={['top']}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
@@ -237,13 +262,28 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     );
   }
 
-  const thread: Thread = threadOrUndef;
-  const item = thread.item;
-
   function handleSend() {
     const text = inputText.trim();
     if (!text) return;
-    sendMessage(threadId, {
+
+    let targetId = activeThreadId;
+
+    if (!targetId && pendingOtherUser) {
+      const newThread = createDirectThread(pendingOtherUser, pendingItem);
+      targetId = newThread.id;
+      setActiveThreadId(newThread.id);
+      if (pendingItem) {
+        sendMessage(targetId, {
+          type: 'item_mention',
+          senderId: CURRENT_USER,
+          text: pendingItem.name,
+          timestamp: 'Just now',
+        });
+      }
+    }
+
+    if (!targetId) return;
+    sendMessage(targetId, {
       type: 'text',
       senderId: CURRENT_USER,
       text,
@@ -258,12 +298,14 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
         return <TextBubble key={msg.id} msg={msg} />;
       case 'system':
         return <SystemMessage key={msg.id} msg={msg} />;
+      case 'item_mention':
+        return displayItem ? <ItemMentionCard key={msg.id} item={displayItem} /> : null;
       case 'borrow_request':
         return (
           <BorrowRequestCard
             key={msg.id}
             msg={msg}
-            thread={thread}
+            thread={thread!}
             navigation={navigation}
             updateRequestStatus={updateRequestStatus}
           />
@@ -275,7 +317,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
           <CounterOfferCard
             key={msg.id}
             msg={msg}
-            thread={thread}
+            thread={thread!}
             navigation={navigation}
           />
         );
@@ -297,55 +339,75 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
             <Ionicons name="chevron-back" size={20} color={theme.colors.ink} />
           </Pressable>
           <View style={styles.headerCenter}>
-            <View style={[styles.headerAvatar, { backgroundColor: thread.otherUser.avatarColor }]}>
-              <Text style={styles.headerAvatarText}>{thread.otherUser.initials}</Text>
+            <View style={[styles.headerAvatar, { backgroundColor: displayOtherUser.avatarColor }]}>
+              <Text style={styles.headerAvatarText}>{displayOtherUser.initials}</Text>
             </View>
             <View>
-              <Text style={styles.headerName}>{thread.otherUser.name}</Text>
-              <Text style={styles.headerHandle}>@{thread.otherUser.handle}</Text>
+              <Text style={styles.headerName}>{displayOtherUser.name}</Text>
+              <Text style={styles.headerHandle}>@{displayOtherUser.handle}</Text>
             </View>
           </View>
           <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.muted} />
         </View>
 
-        {/* Item context bar */}
-        <View style={styles.itemBar}>
-          <View style={styles.itemBarThumb} />
-          <View style={{ flex: 1 }}>
-            <Text style={styles.itemBarName}>{item.name.toUpperCase()}</Text>
-            <Text style={styles.itemBarMeta}>{item.size_label} · {item.category}</Text>
+        {/* Item context bar — only shown when there is an item */}
+        {displayItem && (
+          <View style={styles.itemBar}>
+            <View style={styles.itemBarThumb} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.itemBarName}>{displayItem.name.toUpperCase()}</Text>
+              <Text style={styles.itemBarMeta}>{displayItem.size_label} · {displayItem.category}</Text>
+            </View>
+            <Text style={styles.itemBarPrice}>${(displayItem.price_per_day / 100).toFixed(2)}/day</Text>
           </View>
-          <Text style={styles.itemBarPrice}>${(item.price_per_day / 100).toFixed(2)}/day</Text>
-        </View>
+        )}
 
         {/* Messages */}
         <FlatList
-          data={[...thread.messages].reverse()}
+          data={[...(thread?.messages ?? [])].reverse()}
           inverted
           keyExtractor={(msg) => msg.id}
           contentContainerStyle={styles.messagesList}
           renderItem={({ item: msg }) => renderMessage(msg)}
         />
 
+        {/* "Replying to listing" strip — shown only when starting a thread about an item */}
+        {isNewThread && displayItem && (
+          <View style={styles.replyContext}>
+            <View style={styles.replyAccentBar} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.replyContextLabel}>REPLYING TO LISTING</Text>
+              <Text style={styles.replyContextItem}>{displayItem.name.toUpperCase()}</Text>
+              <Text style={styles.replyContextMeta}>
+                {displayItem.size_label} · ${(displayItem.price_per_day / 100).toFixed(2)}/day
+              </Text>
+            </View>
+            <View style={styles.replyContextThumb} />
+          </View>
+        )}
+
         {/* Input bar */}
         <View style={styles.inputBar}>
-          <Pressable
-            style={styles.offerBtn}
-            onPress={() => navigation.navigate('MakeOffer', {
-              threadId: thread.id,
-              pricePerDay: item.price_per_day,
-            })}
-          >
-            <Ionicons name="pricetag-outline" size={13} color={theme.colors.ink} />
-            <Text style={styles.offerBtnText}>OFFER</Text>
-          </Pressable>
+          {thread && thread.item && (
+            <Pressable
+              style={styles.offerBtn}
+              onPress={() => navigation.navigate('MakeOffer', {
+                threadId: thread.id,
+                pricePerDay: thread.item!.price_per_day,
+              })}
+            >
+              <Ionicons name="pricetag-outline" size={13} color={theme.colors.ink} />
+              <Text style={styles.offerBtnText}>OFFER</Text>
+            </Pressable>
+          )}
           <TextInput
             style={styles.input}
             value={inputText}
             onChangeText={setInputText}
-            placeholder="Message…"
+            placeholder={`Message ${displayOtherUser.name.split(' ')[0]}…`}
             placeholderTextColor={theme.colors.muted}
             multiline
+            autoFocus={isNewThread}
           />
           <Pressable style={styles.sendBtn} onPress={handleSend}>
             <Ionicons name="arrow-up" size={16} color={theme.colors.ivory} />
@@ -636,5 +698,88 @@ const styles = StyleSheet.create({
     borderRadius: 2,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+
+  itemMentionCard: {
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink,
+    borderRadius: 2,
+    padding: 10,
+    maxWidth: '75%',
+    backgroundColor: theme.colors.ivory,
+  },
+  itemMentionLabel: {
+    fontFamily: theme.fonts.barlowBold,
+    fontSize: 8,
+    color: theme.colors.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 6,
+  },
+  itemMentionBody: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  itemMentionThumb: {
+    width: 30,
+    height: 38,
+    backgroundColor: theme.colors.ivoryMid,
+    borderRadius: 1,
+  },
+  itemMentionName: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 11,
+    color: theme.colors.ink,
+    letterSpacing: 0.6,
+  },
+  itemMentionMeta: {
+    fontFamily: theme.fonts.interLight,
+    fontSize: 10,
+    color: theme.colors.muted,
+    marginTop: 2,
+  },
+
+  replyContext: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    backgroundColor: theme.colors.ivoryDark,
+    borderTopWidth: 1,
+    borderTopColor: theme.colors.ivoryMid,
+  },
+  replyAccentBar: {
+    width: 3,
+    height: 38,
+    backgroundColor: theme.colors.ink,
+    borderRadius: 2,
+  },
+  replyContextLabel: {
+    fontFamily: theme.fonts.barlowBold,
+    fontSize: 8,
+    color: theme.colors.muted,
+    letterSpacing: 1.5,
+    textTransform: 'uppercase',
+    marginBottom: 3,
+  },
+  replyContextItem: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 12,
+    color: theme.colors.ink,
+    letterSpacing: 0.5,
+  },
+  replyContextMeta: {
+    fontFamily: theme.fonts.interLight,
+    fontSize: 10,
+    color: theme.colors.muted,
+    marginTop: 1,
+  },
+  replyContextThumb: {
+    width: 30,
+    height: 38,
+    backgroundColor: theme.colors.ivoryMid,
+    borderRadius: 1,
   },
 });

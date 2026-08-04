@@ -12,7 +12,7 @@ export interface ItemAvailability {
   blockedRanges: AvailabilityRange[];
 }
 
-export type VisibilityMode = 'public' | 'friends' | 'hauses';
+export type VisibilityMode = 'public' | 'friends' | 'hauses' | 'private';
 export type CoverStyle = 'mosaic' | 'single' | 'stack';
 
 export interface Board {
@@ -54,6 +54,15 @@ export interface Item {
     rating?: number;
     university?: string;
   };
+}
+
+export interface Comment {
+  id: string;
+  itemId: string;
+  authorId: string;
+  authorName: string;
+  text: string;
+  createdAt: string;
 }
 
 export interface Friend {
@@ -110,6 +119,12 @@ export interface UserProfile {
   items_listed: number;
   rentals_completed: number;
   rating: number;
+  campus_verified?: boolean;
+  campus_id?: string | null;
+  campus_name?: string | null;
+  school_email?: string | null;
+  interests?: string[];
+  onboarding_complete?: boolean;
 }
 
 export interface HausMembership {
@@ -121,8 +136,8 @@ export interface HausMembership {
   user?: Pick<UserProfile, 'id' | 'display_name' | 'avatar_url'>;
 }
 
-export type MessageType = 'text' | 'system' | 'borrow_request' | 'counter_offer' | 'confirmed';
-export type ThreadStatus = 'pending_request' | 'counter_sent' | 'active_rental' | 'completed';
+export type MessageType = 'text' | 'system' | 'borrow_request' | 'counter_offer' | 'confirmed' | 'item_mention';
+export type ThreadStatus = 'pending_request' | 'counter_sent' | 'active_rental' | 'completed' | 'direct';
 
 export interface BorrowRequestPayload {
   dates: { start: string; end: string };
@@ -160,7 +175,7 @@ export interface ThreadParticipant {
 export interface Thread {
   id: string;
   otherUser: ThreadParticipant;
-  item: Item;
+  item?: Item;
   status: ThreadStatus;
   unread: boolean;
   lastMessage: string;

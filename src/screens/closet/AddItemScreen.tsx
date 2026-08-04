@@ -36,9 +36,8 @@ if (Platform.OS === 'android') {
 const CATEGORIES  = ['Tops', 'Outerwear', 'Dresses', 'Bottoms', 'Accessories', 'Shoes'];
 const SIZES       = ['XS', 'S', 'M', 'L', 'XL', 'One Size'];
 const CONDITIONS  = ['Like New', 'Good', 'Fair'];
-const OCCASIONS   = ['Formal', 'Date Night', 'Festival', 'Casual', 'Going Out'];
+const OCCASIONS   = ['Formal', 'Date Night', 'Festival', 'Casual', 'Going Out', 'Gameday', 'Professional', 'Costume'];
 const DURATIONS   = ['1 day', '2 days', '3 days', '5 days', '1 week'];
-const PICKUPS     = ['Campus Pickup', 'Ship', 'Both'];
 
 
 export default function AddItemScreen() {
@@ -46,6 +45,7 @@ export default function AddItemScreen() {
   const { addItem, updateItem } = useCloset();
   const { user } = useAuth();
   const { hauses } = useHauses();
+
   const route = useRoute<RouteProp<AppStackParamList, 'AddItem'>>();
   const existingItem = route.params?.item;
   const isEditMode = !!existingItem;
@@ -84,7 +84,7 @@ export default function AddItemScreen() {
       : '',
   );
   const [maxDuration, setMaxDuration] = useState(() => existingItem?.max_duration ?? '3 days');
-  const [pickup, setPickup]           = useState(() => existingItem?.pickup_method ?? 'Campus Pickup');
+  const pickup = existingItem?.pickup_method ?? 'Campus Pickup';
   const [hausSharing, setHausSharing] = useState<Record<string, boolean>>(() => {
     const existing = existingItem?.haus_visibility ?? {};
     return Object.fromEntries(hauses.map((h) => [h.id, existing[h.id] ?? false]));
@@ -102,18 +102,44 @@ export default function AddItemScreen() {
       Alert.alert('Permission needed', 'Allow photo access to add images.');
       return;
     }
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ['images'],
-      allowsEditing: true,
-      aspect: slot === 0 ? [3, 4] : [1, 1],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      const next = [...photos];
-      next[slot] = result.assets[0].uri;
-      setPhotos(next);
-      setPhotoError(false);
+
+    if (photos[slot]) {
+      // Filled slot: single-select with crop to replace
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets[0]) {
+        const next = [...photos];
+        next[slot] = result.assets[0].uri;
+        setPhotos(next);
+        setPhotoError(false);
+      }
+    } else {
+      // Empty slot: multi-select, fill from this slot forward
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ['images'],
+        allowsMultipleSelection: true,
+        selectionLimit: 6 - slot,
+        quality: 0.8,
+      });
+      if (!result.canceled && result.assets.length > 0) {
+        const next = [...photos];
+        result.assets.forEach((asset, i) => {
+          if (slot + i < 6) next[slot + i] = asset.uri;
+        });
+        setPhotos(next);
+        setPhotoError(false);
+      }
     }
+  }
+
+  function removePhoto(slot: number) {
+    const next = [...photos];
+    next[slot] = null;
+    setPhotos(next);
   }
 
   function toggleRental() {
@@ -284,45 +310,45 @@ export default function AddItemScreen() {
         {/* ── PHOTOS ── */}
         <SectionHeader label="Photos" />
 
-        {/* Row 1: large cover + 2 stacked thumbs */}
-        <View style={styles.photosRow}>
-          <Pressable
-            onPress={() => pickImage(0)}
-            style={[styles.primarySlot, photoError && styles.slotError]}
-          >
-            {photos[0] ? (
-              <Image source={{ uri: photos[0] }} style={styles.primarySlotImg} />
-            ) : (
-              <>
-                <Ionicons name="camera-outline" size={24} color={theme.colors.muted} />
-                <Text style={styles.slotLabel}>ADD COVER{'\n'}PHOTO</Text>
-              </>
-            )}
-          </Pressable>
-
-          <View style={styles.secondarySlots}>
-            {[1, 2].map((slot) => (
-              <Pressable key={slot} onPress={() => pickImage(slot)} style={styles.secondarySlot}>
-                {photos[slot] ? (
-                  <Image source={{ uri: photos[slot]! }} style={styles.secondarySlotImg} />
-                ) : (
-                  <Ionicons name="add" size={18} color={theme.colors.ivoryMid} />
-                )}
-              </Pressable>
-            ))}
-          </View>
-        </View>
-
-        {/* Row 2: 3 equal thumbs */}
-        <View style={styles.photoSecondRow}>
-          {[3, 4, 5].map((slot) => (
-            <Pressable key={slot} onPress={() => pickImage(slot)} style={styles.secondaryRowSlot}>
-              {photos[slot] ? (
-                <Image source={{ uri: photos[slot]! }} style={styles.secondaryRowSlotImg} />
-              ) : (
-                <Ionicons name="add" size={18} color={theme.colors.ivoryMid} />
-              )}
-            </Pressable>
+        {/* 2×3 uniform grid */}
+        <View style={styles.photoGrid}>
+          {([[0, 1, 2], [3, 4, 5]] as number[][]).map((row, ri) => (
+            <View key={ri} style={styles.photoGridRow}>
+              {row.map((slot) => (
+                <Pressable
+                  key={slot}
+                  onPress={() => pickImage(slot)}
+                  style={[
+                    styles.photoSlot,
+                    slot === 0 && styles.photoSlotCover,
+                    slot === 0 && photoError && styles.slotError,
+                  ]}
+                >
+                  {photos[slot] ? (
+                    <>
+                      <Image source={{ uri: photos[slot]! }} style={styles.photoSlotImg} />
+                      {slot === 0 && (
+                        <View style={styles.coverBadge}>
+                          <Text style={styles.coverBadgeText}>COVER</Text>
+                        </View>
+                      )}
+                      <Pressable style={styles.removeBtn} onPress={() => removePhoto(slot)} hitSlop={4}>
+                        <Ionicons name="close-circle" size={16} color={theme.colors.ivory} />
+                      </Pressable>
+                    </>
+                  ) : (
+                    <>
+                      <Ionicons
+                        name={slot === 0 ? 'camera-outline' : 'add'}
+                        size={slot === 0 ? 20 : 16}
+                        color={slot === 0 ? theme.colors.muted : theme.colors.ivoryMid}
+                      />
+                      {slot === 0 && <Text style={styles.slotLabel}>COVER</Text>}
+                    </>
+                  )}
+                </Pressable>
+              ))}
+            </View>
           ))}
         </View>
 
@@ -443,9 +469,7 @@ export default function AddItemScreen() {
 
             <Text style={styles.fieldLabel}>PICKUP / EXCHANGE</Text>
             <View style={styles.chipWrap}>
-              {PICKUPS.map((p) => (
-                <Chip key={p} label={p} selected={pickup === p} onPress={() => setPickup(p)} />
-              ))}
+              <Chip label="Campus Pickup" selected={true} onPress={() => {}} />
             </View>
           </>
         )}
@@ -654,50 +678,24 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 6,
     borderRadius: theme.borderRadius,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink,
     overflow: 'hidden',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
   },
 
-  // Photos
-  photosRow: {
-    flexDirection: 'row',
+  // Photos — 2×3 uniform grid
+  photoGrid: {
     paddingHorizontal: theme.spacing.md,
-    gap: 10,
+    gap: 8,
     marginBottom: 8,
   },
-  primarySlot: {
-    width: 110,
-    height: 130,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius,
-    backgroundColor: theme.colors.ivoryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    overflow: 'hidden',
-  },
-  slotError: { borderColor: '#C0392B' },
-  primarySlotImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-  slotLabel: {
-    fontFamily: theme.fonts.barlowBold,
-    fontSize: 9,
-    color: theme.colors.muted,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-    textAlign: 'center',
-  },
-  secondarySlots: { gap: 10, justifyContent: 'flex-start' },
-  photoSecondRow: {
+  photoGridRow: {
     flexDirection: 'row',
-    paddingHorizontal: theme.spacing.md,
-    gap: 10,
-    marginTop: 10,
-    marginBottom: 8,
+    gap: 8,
   },
-  secondaryRowSlot: {
+  photoSlot: {
     flex: 1,
     aspectRatio: 1,
     borderWidth: 1.5,
@@ -709,20 +707,40 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     overflow: 'hidden',
   },
-  secondaryRowSlotImg: { width: '100%', height: '100%', resizeMode: 'cover' },
-  secondarySlot: {
-    width: 64,
-    height: 60,
-    borderWidth: 1.5,
-    borderStyle: 'dashed',
-    borderColor: theme.colors.ivoryMid,
-    borderRadius: theme.borderRadius,
-    backgroundColor: theme.colors.ivoryDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-    overflow: 'hidden',
+  photoSlotCover: {
+    borderStyle: 'solid',
+    borderColor: theme.colors.ink,
   },
-  secondarySlotImg: { width: '100%', height: '100%', resizeMode: 'cover' },
+  slotError: { borderColor: '#C0392B' },
+  removeBtn: {
+    position: 'absolute', top: 4, right: 4,
+  },
+  photoSlotImg: { width: '100%', height: '100%', resizeMode: 'cover' },
+  slotLabel: {
+    fontFamily: theme.fonts.barlowBold,
+    fontSize: 9,
+    color: theme.colors.muted,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    textAlign: 'center',
+    marginTop: 3,
+  },
+  coverBadge: {
+    position: 'absolute',
+    bottom: 4,
+    left: 4,
+    backgroundColor: 'rgba(20,18,12,0.65)',
+    paddingHorizontal: 5,
+    paddingVertical: 2,
+    borderRadius: 2,
+  },
+  coverBadgeText: {
+    fontFamily: theme.fonts.barlowBold,
+    fontSize: 8,
+    color: theme.colors.ivory,
+    letterSpacing: 0.5,
+    textTransform: 'uppercase',
+  },
   photoCaption: {
     fontFamily: theme.fonts.interLight,
     fontSize: 11,
