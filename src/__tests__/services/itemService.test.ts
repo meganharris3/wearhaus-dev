@@ -26,11 +26,15 @@ function makeChain(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
-const mockFrom = jest.fn();
-
+// See hausService.test.ts for why the mock factory can't reference an
+// externally-declared `const mockFrom = jest.fn()` (babel-jest hoisting
+// order bug) — create it inline, then read it back via the mocked import.
 jest.mock('../../lib/supabase', () => ({
-  supabase: { from: mockFrom },
+  supabase: { from: jest.fn() },
 }));
+
+import { supabase } from '../../lib/supabase';
+const mockFrom = supabase.from as jest.Mock;
 
 import {
   fetchFeedItems,

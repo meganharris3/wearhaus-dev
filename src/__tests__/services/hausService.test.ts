@@ -16,11 +16,19 @@ function makeChain(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
-const mockFrom = jest.fn();
-
+// IMPORTANT: babel-jest hoists this jest.mock() call above any top-level
+// `const mockX = jest.fn()` declared earlier in this file (hoisting moves
+// jest.mock calls and ES imports above plain statements, not the other way
+// around), so a factory that *references* an externally-declared mock
+// variable sees it as `undefined` at the time the factory actually runs.
+// Fix: create the jest.fn() inline inside the factory, then pull the
+// reference back out via the (now-mocked) import afterwards.
 jest.mock('../../lib/supabase', () => ({
-  supabase: { from: mockFrom },
+  supabase: { from: jest.fn() },
 }));
+
+import { supabase } from '../../lib/supabase';
+const mockFrom = supabase.from as jest.Mock;
 
 import {
   fetchMyHauses,

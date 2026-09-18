@@ -4,21 +4,26 @@
  * All Supabase SDK calls are mocked so no network is required.
  */
 
-const mockSignUp              = jest.fn();
-const mockSignInWithPassword  = jest.fn();
-const mockSignOut             = jest.fn();
-const mockGetSession          = jest.fn();
-
+// See hausService.test.ts for why the mock factory can't reference
+// externally-declared `const mockX = jest.fn()` variables (babel-jest
+// hoisting order bug) — create them inline, then read them back via the
+// mocked import.
 jest.mock('../../lib/supabase', () => ({
   supabase: {
     auth: {
-      signUp:              mockSignUp,
-      signInWithPassword:  mockSignInWithPassword,
-      signOut:             mockSignOut,
-      getSession:          mockGetSession,
+      signUp:             jest.fn(),
+      signInWithPassword: jest.fn(),
+      signOut:            jest.fn(),
+      getSession:         jest.fn(),
     },
   },
 }));
+
+import { supabase } from '../../lib/supabase';
+const mockSignUp             = supabase.auth.signUp as jest.Mock;
+const mockSignInWithPassword = supabase.auth.signInWithPassword as jest.Mock;
+const mockSignOut            = supabase.auth.signOut as jest.Mock;
+const mockGetSession         = supabase.auth.getSession as jest.Mock;
 
 import { signUp, signIn, signOut, getSession } from '../../services/authService';
 

@@ -2,11 +2,15 @@
  * Unit tests for src/services/userService.ts
  */
 
-const mockFrom = jest.fn();
-
+// See hausService.test.ts for why the mock factory can't reference an
+// externally-declared `const mockFrom = jest.fn()` (babel-jest hoisting
+// order bug) — create it inline, then read it back via the mocked import.
 jest.mock('../../lib/supabase', () => ({
-  supabase: { from: mockFrom },
+  supabase: { from: jest.fn() },
 }));
+
+import { supabase } from '../../lib/supabase';
+const mockFrom = supabase.from as jest.Mock;
 
 import { fetchUserProfile, updateUserProfile } from '../../services/userService';
 import type { UserProfile } from '../../types';
@@ -68,7 +72,7 @@ describe('fetchUserProfile', () => {
     await fetchUserProfile('u1');
 
     expect(chain.select).toHaveBeenCalledWith(
-      'id, display_name, username, avatar_url, university, bio, items_listed, rentals_completed, rating'
+      'id, display_name, username, avatar_url, university, bio, items_listed, rentals_completed, rating, campus_verified, campus_id, campus_name, school_email, interests, onboarding_complete'
     );
   });
 });
@@ -77,53 +81,65 @@ describe('fetchUserProfile', () => {
 // updateUserProfile
 // ---------------------------------------------------------------------------
 describe('updateUserProfile', () => {
-  function makeUpsertChain(result: { error: unknown }) {
+  // Matches the real implementation: supabase.from('users').update(updates).eq('id', userId),
+  // then (on success) a separate fetchUserProfile() read-back call:
+  // supabase.from('users').select(...).eq('id', userId).single().
+  function makeUpdateChain(result: { error: unknown }) {
     const chain: any = {};
-    chain.upsert = jest.fn().mockResolvedValue(result);
+    chain.update = jest.fn().mockReturnValue(chain);
+    chain.eq = jest.fn().mockResolvedValue(result);
     return chain;
   }
 
-  it('resolves without error on successful upsert', async () => {
-    const chain = makeUpsertChain({ error: null });
-    mockFrom.mockReturnValue(chain);
+  function makeReadBackChain(profile: UserProfile) {
+    const chain: any = {};
+    chain.select = jest.fn().mockReturnValue(chain);
+    chain.eq = jest.fn().mockReturnValue(chain);
+    chain.single = jest.fn().mockResolvedValue({ data: profile, error: null });
+    return chain;
+  }
 
-    await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name' })).resolves.toBeUndefined();
+  it('resolves with the saved profile on successful update', async () => {
+    const updateChain = makeUpdateChain({ error: null });
+    const readBackChain = makeReadBackChain(makeProfile({ display_name: 'New Name' }));
+    mockFrom.mockReturnValueOnce(updateChain).mockReturnValueOnce(readBackChain);
+
+    const result = await updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name' });
 
     expect(mockFrom).toHaveBeenCalledWith('users');
-    expect(chain.upsert).toHaveBeenCalledWith(
-      expect.objectContaining({ id: 'u1', email: 'u1@test.com', display_name: 'New Name' }),
-      { onConflict: 'id' },
-    );
+    expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({ display_name: 'New Name' }));
+    expect(updateChain.eq).toHaveBeenCalledWith('id', 'u1');
+    expect(result.display_name).toBe('New Name');
   });
 
   it('throws when Supabase returns an error', async () => {
-    const chain = makeUpsertChain({ error: { message: 'Permission denied' } });
-    mockFrom.mockReturnValue(chain);
+    const updateChain = makeUpdateChain({ error: { message: 'Permission denied', code: '42501' } });
+    mockFrom.mockReturnValue(updateChain);
 
     await expect(updateUserProfile('u1', 'u1@test.com', { bio: 'Hello' })).rejects.toThrow('Permission denied');
   });
 
   it('passes partial updates correctly', async () => {
-    const chain = makeUpsertChain({ error: null });
-    mockFrom.mockReturnValue(chain);
+    const updateChain = makeUpdateChain({ error: null });
+    const readBackChain = makeReadBackChain(makeProfile());
+    mockFrom.mockReturnValueOnce(updateChain).mockReturnValueOnce(readBackChain);
 
     await updateUserProfile('u1', 'u1@test.com', { bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' });
 
-    expect(chain.upsert).toHaveBeenCalledWith(
+    expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' }),
-      { onConflict: 'id' },
     );
   });
 
   it('can update only avatar_url', async () => {
-    const chain = makeUpsertChain({ error: null });
-    mockFrom.mockReturnValue(chain);
+    const updateChain = makeUpdateChain({ error: null });
+    const readBackChain = makeReadBackChain(makeProfile());
+    mockFrom.mockReturnValueOnce(updateChain).mockReturnValueOnce(readBackChain);
 
     await updateUserProfile('u1', 'u1@test.com', { avatar_url: 'https://cdn.test/photo.jpg' });
 
-    expect(chain.upsert).toHaveBeenCalledWith(
+    expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ avatar_url: 'https://cdn.test/photo.jpg' }),
-      { onConflict: 'id' },
     );
   });
 });
