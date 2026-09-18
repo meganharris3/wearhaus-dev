@@ -21,8 +21,11 @@ export async function joinCampusCloset(campusInfo: CampusInfo, userId: string): 
         haus_type: 'campus',
         campus_id: campusInfo.id,
         is_system_owned: true,
-        member_count: 1,
-        piece_count: 0,
+        // member_count/piece_count intentionally omitted — trg_haus_member_count
+        // (supabase/migrations/001_initial_schema.sql) owns member_count from its
+        // column default of 0, incrementing it when the membership row below is
+        // inserted. Setting it here would double-count, same bug as hausService.ts's
+        // createHaus (see supabase/migrations/010_fix_member_count_trigger.sql).
         description: `The official campus closet for ${campusInfo.name} students.`,
       })
       .select('id')
