@@ -26,15 +26,17 @@ export async function createHaus(
 ): Promise<Haus> {
   const { data, error } = await supabase
     .from('hauses')
-    .insert({ name: payload.name, description: payload.description ?? null, member_count: 1, piece_count: 0 })
+    .insert({ name: payload.name, description: payload.description ?? null })
     .select('id, name, description, cover_url, member_count, piece_count')
     .single();
   if (error) throw new Error(error.message);
 
-  // Add creator as admin member
-  await supabase
+  // Add creator as admin member — the trg_haus_member_count trigger
+  // increments member_count from its column default (0) to 1 here.
+  const { error: memberError } = await supabase
     .from('haus_memberships')
     .insert({ haus_id: data.id, user_id: userId, role: 'admin', joined_at: new Date().toISOString() });
+  if (memberError) throw new Error(memberError.message);
 
   return data as Haus;
 }
@@ -48,24 +50,13 @@ export async function updateHaus(
 }
 
 export async function leaveHaus(hausId: string, userId: string): Promise<void> {
-  await supabase
+  // trg_haus_member_count decrements member_count automatically on delete.
+  const { error } = await supabase
     .from('haus_memberships')
     .delete()
     .eq('haus_id', hausId)
     .eq('user_id', userId);
-
-  // Decrement member count (floor at 0)
-  try {
-    await supabase.rpc('decrement_haus_member_count', { haus_id: hausId });
-  } catch {
-    const { data } = await supabase.from('hauses').select('member_count').eq('id', hausId).single();
-    if (data) {
-      await supabase
-        .from('hauses')
-        .update({ member_count: Math.max(0, (data.member_count ?? 1) - 1) })
-        .eq('id', hausId);
-    }
-  }
+  if (error) throw new Error(error.message);
 }
 
 export async function fetchMembershipRole(hausId: string, userId: string): Promise<'member' | 'admin' | null> {

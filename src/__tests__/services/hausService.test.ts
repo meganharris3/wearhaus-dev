@@ -4,12 +4,13 @@
 
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const methods = ['select', 'eq', 'order', 'limit'];
+  const methods = ['select', 'eq', 'order', 'limit', 'insert', 'delete', 'update'];
 
   methods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
   });
 
+  chain.single = jest.fn().mockResolvedValue(result);
   chain.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
     Promise.resolve(result).then(resolve, reject);
 
@@ -24,16 +25,19 @@ function makeChain(result: { data: unknown; error: unknown }) {
 // Fix: create the jest.fn() inline inside the factory, then pull the
 // reference back out via the (now-mocked) import afterwards.
 jest.mock('../../lib/supabase', () => ({
-  supabase: { from: jest.fn() },
+  supabase: { from: jest.fn(), rpc: jest.fn().mockResolvedValue({ data: null, error: null }) },
 }));
 
 import { supabase } from '../../lib/supabase';
 const mockFrom = supabase.from as jest.Mock;
+const mockRpc = supabase.rpc as jest.Mock;
 
 import {
   fetchMyHauses,
   fetchAllHauses,
   fetchHausMembers,
+  createHaus,
+  leaveHaus,
 } from '../../services/hausService';
 import type { Haus } from '../../types';
 
@@ -168,5 +172,41 @@ describe('fetchHausMembers', () => {
     await fetchHausMembers('h1');
 
     expect(chain.order).toHaveBeenCalledWith('joined_at', { ascending: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createHaus
+// ---------------------------------------------------------------------------
+describe('createHaus', () => {
+  it('does not set member_count on insert — the DB trigger owns it', async () => {
+    const insertChain = makeChain({ data: makeHaus({ id: 'h1' }), error: null });
+    insertChain.single = jest.fn().mockResolvedValue({ data: makeHaus({ id: 'h1' }), error: null });
+    const membershipChain = makeChain({ data: null, error: null });
+    mockFrom
+      .mockReturnValueOnce(insertChain)     // .from('hauses')
+      .mockReturnValueOnce(membershipChain); // .from('haus_memberships')
+
+    await createHaus({ name: 'Style Queens' }, 'user-1');
+
+    const insertCall = insertChain.insert.mock.calls[0][0];
+    expect(insertCall).not.toHaveProperty('member_count');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// leaveHaus
+// ---------------------------------------------------------------------------
+describe('leaveHaus', () => {
+  it('deletes the membership and does not call the decrement RPC', async () => {
+    const deleteChain = makeChain({ data: null, error: null });
+    mockFrom.mockReturnValue(deleteChain);
+
+    await leaveHaus('h1', 'user-1');
+
+    expect(mockFrom).toHaveBeenCalledWith('haus_memberships');
+    expect(deleteChain.eq).toHaveBeenCalledWith('haus_id', 'h1');
+    expect(deleteChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
+    expect(mockRpc).not.toHaveBeenCalled();
   });
 });
