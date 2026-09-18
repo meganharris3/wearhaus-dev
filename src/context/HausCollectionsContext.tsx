@@ -1,78 +1,105 @@
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useCallback, useContext, useState } from 'react';
+import { useAuth } from './AuthContext';
+import {
+  fetchCollectionsForHaus, createCollection as createCollectionRemote,
+  addItemsToCollection as addItemsRemote, removeItemFromCollection as removeItemRemote,
+  type HausCollectionRow,
+} from '../services/collectionService';
 
 export interface HausCollection {
   id: string;
   hausId: string;
   name: string;
-  itemIds: string[];
+  itemIds: string[]; // populated lazily by fetchCollectionItems in the detail screen
   createdBy: string;
   createdAt: string;
+  itemCount: number;
 }
 
-// Mock items representing other Haus members' contributions.
-// These supplement real ClosetContext items for the demo.
-export interface CollectionItem {
-  id: string;
-  name: string;
-  pricePerDay: number;
-  photoThumbColor: string;
-  ownerId: string;
-  ownerName: string;
-  ownerInitials: string;
-  ownerAvatarColor: string;
-  status: 'available' | 'lent' | 'wash';
+function toCollection(row: HausCollectionRow): HausCollection {
+  return { ...row, itemIds: [] };
 }
-
-export const MOCK_HAUS_ITEMS: CollectionItem[] = [
-  { id: 'mock_1', name: 'Silk Midi Dress',      pricePerDay: 18, photoThumbColor: '#E8E4D4', ownerId: 'user_sophie', ownerName: 'Sophie R',  ownerInitials: 'SR', ownerAvatarColor: '#E2DED0', status: 'available' },
-  { id: 'mock_2', name: 'Blazer Cream',          pricePerDay: 14, photoThumbColor: '#DDD8CC', ownerId: 'user_sophie', ownerName: 'Sophie R',  ownerInitials: 'SR', ownerAvatarColor: '#E2DED0', status: 'available' },
-  { id: 'mock_3', name: 'Linen Trousers',        pricePerDay: 10, photoThumbColor: '#D8D4C8', ownerId: 'user_jade',   ownerName: 'Jade T',    ownerInitials: 'JT', ownerAvatarColor: '#C8C820', status: 'available' },
-  { id: 'mock_4', name: 'Wrap Skirt',            pricePerDay: 9,  photoThumbColor: '#E4E0D0', ownerId: 'user_jade',   ownerName: 'Jade T',    ownerInitials: 'JT', ownerAvatarColor: '#C8C820', status: 'lent'      },
-  { id: 'mock_5', name: 'Knit Cardigan',         pricePerDay: 12, photoThumbColor: '#E0DCD0', ownerId: 'user_alex',   ownerName: 'Alex L',    ownerInitials: 'AL', ownerAvatarColor: '#FFFFAD', status: 'available' },
-  { id: 'mock_6', name: 'Mini Pleated Skirt',    pricePerDay: 8,  photoThumbColor: '#D4D0C4', ownerId: 'user_alex',   ownerName: 'Alex L',    ownerInitials: 'AL', ownerAvatarColor: '#FFFFAD', status: 'available' },
-  { id: 'mock_7', name: 'Satin Blouse',          pricePerDay: 11, photoThumbColor: '#E8DDD0', ownerId: 'user_mia',    ownerName: 'Mia Chen',  ownerInitials: 'MC', ownerAvatarColor: '#FFFFAD', status: 'available' },
-  { id: 'mock_8', name: 'Wide Leg Jeans',        pricePerDay: 13, photoThumbColor: '#C8C4B8', ownerId: 'user_mia',    ownerName: 'Mia Chen',  ownerInitials: 'MC', ownerAvatarColor: '#FFFFAD', status: 'available' },
-  { id: 'mock_9', name: 'Floral Sundress',       pricePerDay: 15, photoThumbColor: '#E0E4D8', ownerId: 'user_sophie', ownerName: 'Sophie R',  ownerInitials: 'SR', ownerAvatarColor: '#E2DED0', status: 'available' },
-];
 
 interface HausCollectionsContextValue {
-  collections: HausCollection[];
+  collectionsByHaus: Record<string, HausCollection[]>;
+  isLoading: boolean;
+  loadCollectionsForHaus: (hausId: string) => Promise<void>;
   getCollectionsForHaus: (hausId: string) => HausCollection[];
   getCollectionById: (id: string) => HausCollection | undefined;
-  addCollection: (c: HausCollection) => void;
-  updateCollectionItems: (collectionId: string, itemIds: string[]) => void;
+  createHausCollection: (hausId: string, name: string) => Promise<HausCollection>;
+  addItemsToCollection: (collectionId: string, itemIds: string[]) => Promise<void>;
+  removeItemFromCollection: (collectionId: string, itemId: string) => Promise<void>;
 }
 
 const HausCollectionsContext = createContext<HausCollectionsContextValue | null>(null);
 
 export function HausCollectionsProvider({ children }: { children: React.ReactNode }) {
-  const [collections, setCollections] = useState<HausCollection[]>([]);
+  const { user } = useAuth();
+  const [collectionsByHaus, setCollectionsByHaus] = useState<Record<string, HausCollection[]>>({});
+  const [isLoading, setLoading] = useState(false);
+
+  const loadCollectionsForHaus = useCallback(async (hausId: string) => {
+    setLoading(true);
+    try {
+      const rows = await fetchCollectionsForHaus(hausId);
+      setCollectionsByHaus(prev => ({ ...prev, [hausId]: rows.map(toCollection) }));
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   function getCollectionsForHaus(hausId: string): HausCollection[] {
-    return collections.filter(c => c.hausId === hausId);
+    return collectionsByHaus[hausId] ?? [];
   }
 
   function getCollectionById(id: string): HausCollection | undefined {
-    return collections.find(c => c.id === id);
+    for (const list of Object.values(collectionsByHaus)) {
+      const found = list.find(c => c.id === id);
+      if (found) return found;
+    }
+    return undefined;
   }
 
-  function addCollection(c: HausCollection) {
-    setCollections(prev => [c, ...prev]);
+  async function createHausCollection(hausId: string, name: string): Promise<HausCollection> {
+    if (!user?.id) throw new Error('Not authenticated');
+    const row = await createCollectionRemote(hausId, name, user.id);
+    const collection = toCollection(row);
+    setCollectionsByHaus(prev => ({ ...prev, [hausId]: [collection, ...(prev[hausId] ?? [])] }));
+    return collection;
   }
 
-  function updateCollectionItems(collectionId: string, itemIds: string[]) {
-    setCollections(prev =>
-      prev.map(c => c.id === collectionId ? { ...c, itemIds } : c),
-    );
+  async function addItemsToCollection(collectionId: string, itemIds: string[]): Promise<void> {
+    if (!user?.id) throw new Error('Not authenticated');
+    await addItemsRemote(collectionId, itemIds, user.id);
+    setCollectionsByHaus(prev => {
+      const next = { ...prev };
+      for (const hausId of Object.keys(next)) {
+        next[hausId] = next[hausId].map(c =>
+          c.id === collectionId ? { ...c, itemCount: c.itemCount + itemIds.length } : c,
+        );
+      }
+      return next;
+    });
+  }
+
+  async function removeItemFromCollection(collectionId: string, itemId: string): Promise<void> {
+    await removeItemRemote(collectionId, itemId);
+    setCollectionsByHaus(prev => {
+      const next = { ...prev };
+      for (const hausId of Object.keys(next)) {
+        next[hausId] = next[hausId].map(c =>
+          c.id === collectionId ? { ...c, itemCount: Math.max(0, c.itemCount - 1) } : c,
+        );
+      }
+      return next;
+    });
   }
 
   return (
     <HausCollectionsContext.Provider value={{
-      collections,
-      getCollectionsForHaus,
-      getCollectionById,
-      addCollection,
-      updateCollectionItems,
+      collectionsByHaus, isLoading, loadCollectionsForHaus,
+      getCollectionsForHaus, getCollectionById,
+      createHausCollection, addItemsToCollection, removeItemFromCollection,
     }}>
       {children}
     </HausCollectionsContext.Provider>

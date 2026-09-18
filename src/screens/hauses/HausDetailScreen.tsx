@@ -25,7 +25,7 @@ import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
 import {
-  useHausCollections, MOCK_HAUS_ITEMS,
+  useHausCollections,
   type HausCollection,
 } from '../../context/HausCollectionsContext';
 import { fetchMembershipRole } from '../../services/hausService';
@@ -196,8 +196,6 @@ function HausTabRow({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (
 function resolveCollectionItem(id: string, closetItems: Item[]) {
   const real = closetItems.find(i => i.id === id);
   if (real) return { ownerId: real.owner_id as string | undefined, photoUrl: real.photo_url, thumbColor: '#E4E0D0' };
-  const mock = MOCK_HAUS_ITEMS.find(m => m.id === id);
-  if (mock) return { ownerId: mock.ownerId as string | undefined, photoUrl: undefined, thumbColor: mock.photoThumbColor };
   return { ownerId: undefined as string | undefined, photoUrl: undefined, thumbColor: '#EEEAE0' };
 }
 
@@ -209,10 +207,14 @@ function HausCollectionCard({
   onPress: () => void;
 }) {
   const { items: closetItems } = useCloset();
+  // collection.itemIds is populated lazily (only in CollectionDetailScreen via
+  // fetchCollectionItems), so the grid preview tiles/contributor count are
+  // blank until that screen has been visited — but itemCount comes straight
+  // from the service and is always accurate.
   const resolved = collection.itemIds.map(id => resolveCollectionItem(id, closetItems));
   const contributorCount = new Set(resolved.map(r => r.ownerId).filter(Boolean)).size;
   const tiles = [0, 1, 2, 3].map(i => resolved[i]);
-  const count = collection.itemIds.length;
+  const count = collection.itemCount;
 
   return (
     <TouchableOpacity onPress={onPress} style={coll.card} activeOpacity={0.85}>
@@ -375,7 +377,7 @@ export default function HausDetailScreen() {
   const { items: allItems, updateItem } = useCloset();
   const { leaveHaus, renameHaus } = useHauses();
   const { user, profile } = useAuth();
-  const { getCollectionsForHaus } = useHausCollections();
+  const { getCollectionsForHaus, loadCollectionsForHaus } = useHausCollections();
 
   const [activeTab,    setActiveTab]    = useState<Tab>('items');
   const [inviteVisible, setInviteVisible] = useState(false);
@@ -399,6 +401,10 @@ export default function HausDetailScreen() {
       .catch(() => { if (!cancelled) setIsOwner(false); });
     return () => { cancelled = true; };
   }, [haus.id, user?.id]);
+
+  useEffect(() => {
+    loadCollectionsForHaus(haus.id);
+  }, [haus.id, loadCollectionsForHaus]);
 
   const hausItems = allItems.filter(item => item.haus_visibility?.[haus.id] === true);
   const filteredItems = hausItems.filter(item => {

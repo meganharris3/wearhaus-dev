@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, StyleSheet,
 } from 'react-native';
@@ -9,7 +9,8 @@ import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import StatusTag from '../../components/StatusTag';
-import { useHausCollections, MOCK_HAUS_ITEMS, type CollectionItem } from '../../context/HausCollectionsContext';
+import { useHausCollections } from '../../context/HausCollectionsContext';
+import { fetchCollectionItems } from '../../services/collectionService';
 import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
@@ -19,7 +20,7 @@ import type { Item } from '../../types';
 type Nav   = NativeStackNavigationProp<AppStackParamList>;
 type Route = RouteProp<AppStackParamList, 'CollectionDetail'>;
 
-// Unified item shape for display — covers both real Item and CollectionItem
+// Display shape derived from a real Item row
 interface DisplayItem {
   id: string;
   name: string;
@@ -57,20 +58,6 @@ function toDisplayItem(item: Item, profile: { display_name?: string } | null): D
     ownerInitials:    getInitials(ownerName),
     ownerAvatarColor: avatarColorForId(item.owner_id),
     status:           item.status === 'draft' ? 'available' : item.status,
-  };
-}
-
-function mockToDisplay(m: CollectionItem): DisplayItem {
-  return {
-    id:               m.id,
-    name:             m.name,
-    pricePerDay:      m.pricePerDay,
-    photoThumbColor:  m.photoThumbColor,
-    ownerId:          m.ownerId,
-    ownerName:        m.ownerName,
-    ownerInitials:    m.ownerInitials,
-    ownerAvatarColor: m.ownerAvatarColor,
-    status:           m.status,
   };
 }
 
@@ -178,6 +165,16 @@ export default function CollectionDetailScreen() {
   const collection = getCollectionById(collectionId);
   const haus = hauses.find(h => h.id === collection?.hausId);
 
+  const [remoteItems, setRemoteItems] = useState<Item[]>([]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCollectionItems(collectionId)
+      .then(rows => { if (!cancelled) setRemoteItems(rows); })
+      .catch(() => { if (!cancelled) setRemoteItems([]); });
+    return () => { cancelled = true; };
+  }, [collectionId]);
+
   if (!collection) {
     return (
       <SafeAreaView style={s.safe} edges={['top']}>
@@ -191,14 +188,7 @@ export default function CollectionDetailScreen() {
     );
   }
 
-  // Resolve each itemId to a DisplayItem — check closet first, then mock pool
-  const items: DisplayItem[] = collection.itemIds.map(id => {
-    const real = closetItems.find(i => i.id === id);
-    if (real) return toDisplayItem(real, profile);
-    const mock = MOCK_HAUS_ITEMS.find(m => m.id === id);
-    if (mock) return mockToDisplay(mock);
-    return null;
-  }).filter((x): x is DisplayItem => x !== null);
+  const items: DisplayItem[] = remoteItems.map(item => toDisplayItem(item, profile));
 
   // Dedupe contributors
   const contributorMap = new Map<string, Contributor>();

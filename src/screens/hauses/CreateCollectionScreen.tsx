@@ -9,7 +9,6 @@ import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { useHausCollections } from '../../context/HausCollectionsContext';
-import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
 type Nav   = NativeStackNavigationProp<AppStackParamList>;
@@ -20,25 +19,22 @@ export default function CreateCollectionScreen() {
   const route      = useRoute<Route>();
   const { hausId } = route.params;
 
-  const { addCollection } = useHausCollections();
-  const { user } = useAuth();
+  const { createHausCollection } = useHausCollections();
   const [name, setName] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
-  function handleCreate() {
+  async function handleCreate() {
     const trimmed = name.trim();
-    if (!trimmed) return;
-    const collectionId = `coll_${Date.now()}`;
-    addCollection({
-      id:        collectionId,
-      hausId,
-      name:      trimmed,
-      itemIds:   [],
-      createdBy: user?.id ?? 'me',
-      createdAt: new Date().toISOString(),
-    });
-    // Dismiss modal then push detail
-    navigation.goBack();
-    navigation.navigate('CollectionDetail', { collectionId });
+    if (!trimmed || isCreating) return;
+    setIsCreating(true);
+    try {
+      const collection = await createHausCollection(hausId, trimmed);
+      // Dismiss modal then push detail
+      navigation.goBack();
+      navigation.navigate('CollectionDetail', { collectionId: collection.id });
+    } catch {
+      setIsCreating(false);
+    }
   }
 
   return (
@@ -74,10 +70,10 @@ export default function CreateCollectionScreen() {
       <View style={s.footer}>
         <TouchableOpacity
           onPress={handleCreate}
-          disabled={!name.trim()}
-          style={[s.createBtn, !name.trim() && s.createBtnDisabled]}
+          disabled={!name.trim() || isCreating}
+          style={[s.createBtn, (!name.trim() || isCreating) && s.createBtnDisabled]}
         >
-          <Text style={s.createBtnText}>Create Collection</Text>
+          <Text style={s.createBtnText}>{isCreating ? 'Creating…' : 'Create Collection'}</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

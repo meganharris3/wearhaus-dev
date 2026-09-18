@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, Image, StyleSheet,
 } from 'react-native';
@@ -8,7 +8,8 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import type { RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
-import { useHausCollections, MOCK_HAUS_ITEMS } from '../../context/HausCollectionsContext';
+import { useHausCollections } from '../../context/HausCollectionsContext';
+import { fetchCollectionItems } from '../../services/collectionService';
 import { useCloset } from '../../context/ClosetContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Item } from '../../types';
@@ -39,27 +40,28 @@ export default function AddItemsToCollectionScreen() {
   const route      = useRoute<Route>();
   const { collectionId } = route.params;
 
-  const { getCollectionById, updateCollectionItems } = useHausCollections();
+  const { getCollectionById, addItemsToCollection } = useHausCollections();
   const { items: closetItems } = useCloset();
 
   const collection = getCollectionById(collectionId);
-  const alreadyAdded = new Set(collection?.itemIds ?? []);
 
-  // Combine real closet items + mock pool, excluding already-added
+  const [alreadyAddedIds, setAlreadyAddedIds] = useState<Set<string>>(new Set());
+  const [isAdding, setIsAdding] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchCollectionItems(collectionId)
+      .then(rows => { if (!cancelled) setAlreadyAddedIds(new Set(rows.map(i => i.id))); })
+      .catch(() => { if (!cancelled) setAlreadyAddedIds(new Set()); });
+    return () => { cancelled = true; };
+  }, [collectionId]);
+
+  // Only real closet items can be added — collection items are always real now.
   const candidates: SelectableItem[] = useMemo(() => {
-    const realSelectable = closetItems
-      .filter(i => !alreadyAdded.has(i.id))
+    return closetItems
+      .filter(i => !alreadyAddedIds.has(i.id))
       .map(toSelectable);
-    const mockSelectable = MOCK_HAUS_ITEMS
-      .filter(m => !alreadyAdded.has(m.id))
-      .map(m => ({
-        id:              m.id,
-        name:            m.name,
-        pricePerDay:     m.pricePerDay,
-        photoThumbColor: m.photoThumbColor,
-      }));
-    return [...realSelectable, ...mockSelectable];
-  }, [closetItems, collection]);
+  }, [closetItems, alreadyAddedIds]);
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
 
@@ -71,11 +73,15 @@ export default function AddItemsToCollectionScreen() {
     });
   }
 
-  function handleAdd() {
-    if (selected.size === 0) return;
-    const next = [...(collection?.itemIds ?? []), ...Array.from(selected)];
-    updateCollectionItems(collectionId, next);
-    navigation.goBack();
+  async function handleAdd() {
+    if (selected.size === 0 || isAdding) return;
+    setIsAdding(true);
+    try {
+      await addItemsToCollection(collectionId, Array.from(selected));
+      navigation.goBack();
+    } catch {
+      setIsAdding(false);
+    }
   }
 
   // Build 2-col grid rows
@@ -153,13 +159,15 @@ export default function AddItemsToCollectionScreen() {
       <View style={s.footer}>
         <TouchableOpacity
           onPress={handleAdd}
-          disabled={selected.size === 0}
-          style={[s.addBtn, selected.size === 0 && s.addBtnDisabled]}
+          disabled={selected.size === 0 || isAdding}
+          style={[s.addBtn, (selected.size === 0 || isAdding) && s.addBtnDisabled]}
         >
           <Text style={s.addBtnText}>
-            {selected.size === 0
-              ? 'Select Items'
-              : `Add ${selected.size} Item${selected.size > 1 ? 's' : ''}`}
+            {isAdding
+              ? 'Adding…'
+              : selected.size === 0
+                ? 'Select Items'
+                : `Add ${selected.size} Item${selected.size > 1 ? 's' : ''}`}
           </Text>
         </TouchableOpacity>
       </View>
