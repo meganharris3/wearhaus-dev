@@ -60,9 +60,7 @@ describe('createHaus', () => {
 describe('leaveHaus', () => {
   it('deletes the membership and does not call the decrement RPC', async () => {
     const deleteChain = makeChain({ data: null, error: null });
-    const mockRpc = jest.fn();
     mockFrom.mockReturnValue(deleteChain);
-    (require('../../lib/supabase').supabase as any).rpc = mockRpc;
 
     await leaveHaus('h1', 'user-1');
 
@@ -74,7 +72,9 @@ describe('leaveHaus', () => {
 });
 ```
 
-Also update the mock setup at the top of the file to include `insert`, `delete`, and `single` in the chainable methods list, and export an `rpc` stub on the mocked `supabase` object:
+Also update the mock setup at the top of the file to include `insert`, `delete`, and `single` in the chainable methods list, and export an `rpc` stub on the mocked `supabase` object.
+
+> **Mock hoisting, read this before writing any `jest.mock('../../lib/supabase', ...)` block in this plan:** babel-jest hoists `jest.mock()` calls (and the ES `import` statements that trigger the mocked module to load) above any plain `const mockX = jest.fn()` declared earlier in the file — hoisting only moves imports/`jest.mock` calls, never the other way around. A factory that *references* such an externally-declared variable sees it as `undefined` at the moment it actually runs. **Always create the `jest.fn()` inline inside the factory, then pull the reference back out through the (now-mocked) import**, exactly as shown below. Every test file in this plan (collectionService, boardService, messageService, interactionsService, notificationService, and the `fetchAllHausMembers` addition in Part 4) must use this same shape.
 
 ```typescript
 function makeChain(result: { data: unknown; error: unknown }) {
@@ -92,12 +92,13 @@ function makeChain(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
-const mockFrom = jest.fn();
-const mockRpc = jest.fn().mockResolvedValue({ data: null, error: null });
-
 jest.mock('../../lib/supabase', () => ({
-  supabase: { from: mockFrom, rpc: mockRpc },
+  supabase: { from: jest.fn(), rpc: jest.fn().mockResolvedValue({ data: null, error: null }) },
 }));
+
+import { supabase } from '../../lib/supabase';
+const mockFrom = supabase.from as jest.Mock;
+const mockRpc  = supabase.rpc as jest.Mock;
 
 import {
   fetchMyHauses,
@@ -362,8 +363,10 @@ function makeChain(result: { data: unknown; error: unknown }) {
   return chain;
 }
 
-const mockFrom = jest.fn();
-jest.mock('../../lib/supabase', () => ({ supabase: { from: mockFrom } }));
+jest.mock('../../lib/supabase', () => ({ supabase: { from: jest.fn() } }));
+
+import { supabase } from '../../lib/supabase';
+const mockFrom = supabase.from as jest.Mock;
 
 import {
   fetchCollectionsForHaus,
