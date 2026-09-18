@@ -7,7 +7,7 @@ import AuthStack from './AuthStack';
 import AppStack from './AppStack';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 
-const DEV_BYPASS = false; // set false to re-enable auth
+const DEV_BYPASS = true; // set false to re-enable auth
 
 export default function RootNavigator() {
   const { session, profile, loading } = useAuth();

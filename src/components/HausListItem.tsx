@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import type { Haus } from '../types';
 
@@ -7,13 +8,14 @@ interface HausListItemProps {
   haus: Haus;
   pieceCount?: number;
   onPress: () => void;
+  onLeave?: () => void;
 }
 
 function getInitial(name: string): string {
   return name.trim().charAt(0).toUpperCase();
 }
 
-export default function HausListItem({ haus, pieceCount, onPress }: HausListItemProps) {
+export default function HausListItem({ haus, pieceCount, onPress, onLeave }: HausListItemProps) {
   // Generate up to 3 avatar placeholders from haus name words
   const words = haus.name.split(' ').slice(0, 3);
 
@@ -47,6 +49,13 @@ export default function HausListItem({ haus, pieceCount, onPress }: HausListItem
       <Pressable onPress={onPress} style={styles.viewButton}>
         <Text style={styles.viewButtonText}>VIEW</Text>
       </Pressable>
+
+      {/* Leave button */}
+      {onLeave ? (
+        <Pressable onPress={onLeave} style={styles.leaveButton} hitSlop={8}>
+          <Ionicons name="exit-outline" size={18} color="#C0392B" />
+        </Pressable>
+      ) : null}
     </Pressable>
   );
 }
@@ -109,5 +118,12 @@ const styles = StyleSheet.create({
     color: theme.colors.ink,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+  },
+  leaveButton: {
+    marginLeft: 8,
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 });

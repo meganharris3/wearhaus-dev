@@ -1,10 +1,11 @@
-import { useMemo, useRef } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   View,
   Text,
   ScrollView,
   Pressable,
   PanResponder,
+  Modal,
   StyleSheet,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,11 +18,14 @@ import MessagesIcon from '../../components/MessagesIcon';
 import { useHauses } from '../../context/HausesContext';
 import { useCloset } from '../../context/ClosetContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
+import type { Haus } from '../../types';
 
 export default function HausesScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
-  const { hauses } = useHauses();
-  const { items } = useCloset();
+  const { hauses, leaveHaus } = useHauses();
+  const { items, updateItem } = useCloset();
+  const [leaveTarget, setLeaveTarget] = useState<Haus | null>(null);
+  const [isLeaving, setIsLeaving] = useState(false);
 
   const pieceCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -32,6 +36,23 @@ export default function HausesScreen() {
     }
     return counts;
   }, [hauses, items]);
+
+  async function confirmLeave() {
+    if (!leaveTarget) return;
+    setIsLeaving(true);
+    try {
+      const hausItems = items.filter((item) => item.haus_visibility?.[leaveTarget.id] === true);
+      await Promise.all(
+        hausItems.map((item) =>
+          updateItem({ ...item, haus_visibility: { ...item.haus_visibility, [leaveTarget.id]: false } }),
+        ),
+      );
+      await leaveHaus(leaveTarget.id);
+      setLeaveTarget(null);
+    } finally {
+      setIsLeaving(false);
+    }
+  }
 
   const panResponder = useRef(
     PanResponder.create({
@@ -49,7 +70,12 @@ export default function HausesScreen() {
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
           {/* Header row */}
           <View style={styles.headerRow}>
-            <Text style={styles.heading}>MY HAUSES</Text>
+            <View style={styles.headingRow}>
+              <Pressable onPress={() => navigation.goBack()} hitSlop={8}>
+                <Ionicons name="chevron-back" size={22} color={theme.colors.ink} />
+              </Pressable>
+              <Text style={styles.heading}>MY HAUSES</Text>
+            </View>
             <View style={styles.actions}>
               <Pressable
                 onPress={() => navigation.navigate('Friends')}
@@ -74,6 +100,7 @@ export default function HausesScreen() {
                 haus={haus}
                 pieceCount={pieceCounts[haus.id]}
                 onPress={() => navigation.navigate('HausDetail', { haus })}
+                onLeave={() => setLeaveTarget(haus)}
               />
             ))}
           </View>
@@ -88,9 +115,100 @@ export default function HausesScreen() {
           </Pressable>
         </ScrollView>
       </View>
+
+      {/* Leave Confirmation Modal */}
+      <Modal
+        visible={!!leaveTarget}
+        transparent
+        animationType="fade"
+        onRequestClose={() => !isLeaving && setLeaveTarget(null)}
+      >
+        <Pressable
+          style={leaveModal.overlay}
+          onPress={() => !isLeaving && setLeaveTarget(null)}
+        >
+          <Pressable style={leaveModal.card} onPress={() => {}}>
+            <View style={leaveModal.iconWrap}>
+              <Ionicons name="exit-outline" size={24} color="#C0392B" />
+            </View>
+            <Text style={leaveModal.title}>LEAVE HAUS?</Text>
+            <Text style={leaveModal.body}>
+              You'll be removed from{' '}
+              <Text style={leaveModal.hausName}>{leaveTarget?.name}</Text>
+              {' '}and your shared pieces will no longer appear here.
+            </Text>
+            <View style={leaveModal.btnRow}>
+              <Pressable
+                style={leaveModal.cancelBtn}
+                onPress={() => setLeaveTarget(null)}
+                disabled={isLeaving}
+              >
+                <Text style={leaveModal.cancelText}>CANCEL</Text>
+              </Pressable>
+              <Pressable
+                style={[leaveModal.leaveBtn, isLeaving && leaveModal.leaveBtnDisabled]}
+                onPress={confirmLeave}
+                disabled={isLeaving}
+              >
+                <Text style={leaveModal.leaveText}>
+                  {isLeaving ? 'LEAVING…' : 'LEAVE'}
+                </Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
+
+const leaveModal = StyleSheet.create({
+  overlay: {
+    flex: 1, backgroundColor: 'rgba(0,0,0,0.5)',
+    alignItems: 'center', justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  card: {
+    width: '100%', backgroundColor: theme.colors.ivory,
+    borderRadius: theme.borderRadius, borderWidth: 1.5,
+    borderColor: theme.colors.ink, padding: 24, alignItems: 'center',
+  },
+  iconWrap: {
+    width: 48, height: 48, borderRadius: 24,
+    backgroundColor: '#FFF0EE', borderWidth: 1.5, borderColor: '#C0392B',
+    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
+  },
+  title: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 18,
+    letterSpacing: 2, color: theme.colors.ink, textTransform: 'uppercase',
+    marginBottom: 10,
+  },
+  body: {
+    fontFamily: theme.fonts.interLight, fontSize: 13,
+    color: theme.colors.muted, textAlign: 'center',
+    lineHeight: 20, marginBottom: 24,
+  },
+  hausName: { fontFamily: theme.fonts.interSemiBold, color: theme.colors.ink },
+  btnRow: { flexDirection: 'row', gap: 10, width: '100%' },
+  cancelBtn: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderRadius: theme.borderRadius,
+  },
+  cancelText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
+    color: theme.colors.muted, letterSpacing: 1, textTransform: 'uppercase',
+  },
+  leaveBtn: {
+    flex: 1, paddingVertical: 12, alignItems: 'center',
+    backgroundColor: '#C0392B', borderRadius: theme.borderRadius,
+  },
+  leaveBtnDisabled: { opacity: 0.5 },
+  leaveText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 11,
+    color: '#FFFFFF', letterSpacing: 1, textTransform: 'uppercase',
+  },
+});
 
 const styles = StyleSheet.create({
   safe: {
@@ -107,6 +225,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingTop: theme.spacing.md,
     paddingBottom: 12,
+  },
+  headingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   actions: {
     flexDirection: 'row',

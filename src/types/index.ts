@@ -140,11 +140,23 @@ export type MessageType = 'text' | 'system' | 'borrow_request' | 'counter_offer'
 export type ThreadStatus = 'pending_request' | 'counter_sent' | 'active_rental' | 'completed' | 'direct';
 
 export interface BorrowRequestPayload {
-  dates: { start: string; end: string };
-  duration: number;
-  pricePerDay: number;
-  pickup: string;
-  total: number;
+  lenderId: string;
+  lenderFirstName: string;
+  borrowerId: string;
+  borrowerFirstName: string;
+  item: {
+    name: string;
+    size: string;
+    condition: string;
+    thumbColor: string;
+    photo: string | null;
+  };
+  startDate: string;
+  endDate: string;
+  days: number;
+  pricePerDay: number;   // dollars
+  pickupMethod: string;
+  total: number;         // dollars
   status: 'pending' | 'accepted' | 'declined' | 'countered';
 }
 

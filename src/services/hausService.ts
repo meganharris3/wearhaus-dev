@@ -68,6 +68,17 @@ export async function leaveHaus(hausId: string, userId: string): Promise<void> {
   }
 }
 
+export async function fetchMembershipRole(hausId: string, userId: string): Promise<'member' | 'admin' | null> {
+  const { data, error } = await supabase
+    .from('haus_memberships')
+    .select('role')
+    .eq('haus_id', hausId)
+    .eq('user_id', userId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.role ?? null;
+}
+
 export async function fetchHausMembers(hausId: string) {
   const { data, error } = await supabase
     .from('haus_memberships')

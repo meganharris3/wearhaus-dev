@@ -30,9 +30,9 @@ const THUMB_COLORS = ['#E8E4D4', '#E0DCD0', '#D8D4C8', '#E4DDD4'];
 function BoardMosaicCover({ items, coverStyle }: { items: (Item | null)[]; coverStyle: CoverStyle }) {
   if (coverStyle === 'single') {
     return (
-      <View style={{ height: 110 }}>
+      <View style={{ height: 114 }}>
         {items[0]?.photo_url
-          ? <Image source={{ uri: items[0].photo_url }} style={{ width: '100%', height: 110 }} resizeMode="cover" />
+          ? <Image source={{ uri: items[0].photo_url }} style={{ width: '100%', height: 114 }} resizeMode="cover" />
           : <View style={{ flex: 1, backgroundColor: THUMB_COLORS[0], alignItems: 'center', justifyContent: 'center' }}>
               <Ionicons name="shirt-outline" size={24} color="#14120C" style={{ opacity: 0.12 }} />
             </View>
@@ -43,7 +43,7 @@ function BoardMosaicCover({ items, coverStyle }: { items: (Item | null)[]; cover
 
   if (coverStyle === 'stack') {
     return (
-      <View style={{ height: 110 }}>
+      <View style={{ height: 114 }}>
         <View style={{ flex: 1, borderBottomWidth: 0.5, borderBottomColor: '#14120C', overflow: 'hidden' }}>
           {items[0]?.photo_url
             ? <Image source={{ uri: items[0].photo_url }} style={{ width: '100%', height: '100%' }} resizeMode="cover" />
@@ -68,7 +68,7 @@ function BoardMosaicCover({ items, coverStyle }: { items: (Item | null)[]; cover
   const slots: (Item | null)[] = [...items.slice(0, 4)];
   while (slots.length < 4) slots.push(null);
   return (
-    <View style={{ height: 110, flexDirection: 'row', flexWrap: 'wrap' }}>
+    <View style={{ height: 114, flexDirection: 'row', flexWrap: 'wrap' }}>
       {slots.map((item, i) => (
         <View key={i} style={{
           width: '50%', height: '50%', overflow: 'hidden',
@@ -92,14 +92,14 @@ function BoardCard({ board, allItems }: { board: Board; allItems: Item[] }) {
   const items = board.itemIds.map((id) => allItems.find((i) => i.id === id) ?? null);
   const visLabel = { public: 'Public', friends: 'Friends', private: 'Private' }[board.visibility];
   return (
-    <View style={{ borderWidth: 1.5, borderColor: '#14120C', borderRadius: 2, overflow: 'hidden' }}>
+    <View style={{ borderWidth: 1.5, borderColor: '#14120C', borderRadius: 12, overflow: 'hidden' }}>
       <BoardMosaicCover items={items} coverStyle={board.coverStyle} />
-      <View style={{ padding: 8, borderTopWidth: 0.5, borderTopColor: '#E2DED0' }}>
+      <View style={{ paddingVertical: 9, paddingHorizontal: 11, borderTopWidth: 0.5, borderTopColor: '#E2DED0' }}>
         <Text numberOfLines={1} style={{
-          fontFamily: 'Barlow_800ExtraBold', fontSize: 11,
+          fontFamily: 'Barlow_800ExtraBold', fontSize: 12,
           letterSpacing: 0.4, textTransform: 'uppercase', color: '#14120C', marginBottom: 2,
         }}>{board.name}</Text>
-        <Text style={{ fontFamily: 'Inter_300Light', fontSize: 9, color: '#7A7762' }}>
+        <Text style={{ fontFamily: 'Inter_300Light', fontSize: 9.5, color: '#7A7762' }}>
           {board.itemIds.length} items · {visLabel}
         </Text>
       </View>
@@ -128,9 +128,9 @@ function BoardsGrid({
                 key="new"
                 onPress={onCreatePress}
                 style={{
-                  width: '47%', height: 155,
+                  width: '47%', height: 165,
                   borderWidth: 1.5, borderColor: '#E2DED0',
-                  borderStyle: 'dashed', borderRadius: 2,
+                  borderStyle: 'dashed', borderRadius: 12,
                   alignItems: 'center', justifyContent: 'center', gap: 6,
                 }}
               >

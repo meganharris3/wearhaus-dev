@@ -21,6 +21,7 @@ import ExchangeDetailScreen from '../screens/borrows/ExchangeDetailScreen';
 import CollectionDetailScreen from '../screens/hauses/CollectionDetailScreen';
 import CreateCollectionScreen from '../screens/hauses/CreateCollectionScreen';
 import AddItemsToCollectionScreen from '../screens/hauses/AddItemsToCollectionScreen';
+import AddItemsToHausScreen from '../screens/hauses/AddItemsToHausScreen';
 import { RequestsProvider } from '../context/RequestsContext';
 import { HausesProvider } from '../context/HausesContext';
 import { HausCollectionsProvider } from '../context/HausCollectionsContext';
@@ -44,6 +45,7 @@ export type AppStackParamList = {
   CollectionDetail: { collectionId: string };
   CreateCollection: { hausId: string };
   AddItemsToCollection: { collectionId: string };
+  AddItemsToHaus: { hausId: string; hausName?: string };
   BoardDetail: { boardId: string };
   CreateBoard: { boardId?: string } | undefined;
   AddItemsToBoard: { boardId: string };
@@ -84,6 +86,7 @@ export default function AppStack() {
           <Stack.Screen name="CollectionDetail"     component={CollectionDetailScreen} />
           <Stack.Screen name="CreateCollection"     component={CreateCollectionScreen} options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="AddItemsToCollection" component={AddItemsToCollectionScreen} />
+          <Stack.Screen name="AddItemsToHaus"       component={AddItemsToHausScreen} />
           <Stack.Screen name="BoardDetail"      component={BoardDetailScreen} />
           <Stack.Screen name="CreateBoard"      component={CreateBoardScreen} options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="AddItemsToBoard"  component={AddItemsToBoardScreen} />

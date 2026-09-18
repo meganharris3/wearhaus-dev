@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -19,7 +19,7 @@ import type { RouteProp, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import { theme } from '../../theme';
-import ItemCard from '../../components/ItemCard';
+import StatusTag from '../../components/StatusTag';
 import Chip from '../../components/Chip';
 import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
@@ -28,6 +28,7 @@ import {
   useHausCollections, MOCK_HAUS_ITEMS,
   type HausCollection,
 } from '../../context/HausCollectionsContext';
+import { fetchMembershipRole } from '../../services/hausService';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
@@ -56,10 +57,6 @@ interface InviteMember {
   isYou: boolean;
 }
 
-function getInitial(word: string) {
-  return word.trim().charAt(0).toUpperCase();
-}
-
 function showToast(msg: string) {
   if (Platform.OS === 'android') {
     ToastAndroid.show(msg, ToastAndroid.SHORT);
@@ -68,7 +65,141 @@ function showToast(msg: string) {
   }
 }
 
-// ─── HausCollectionCard ───────────────────────────────────────────────────────
+// ─── HausHeader — compact, text-only, no avatar ──────────────────────────────
+
+function HausFact({ num, label }: { num: number; label: string }) {
+  return (
+    <Text style={header.fact}>
+      <Text style={header.factNum}>{num}</Text> {label}
+    </Text>
+  );
+}
+
+function FactDot() {
+  return <View style={header.dot} />;
+}
+
+function HausHeader({
+  name,
+  isOwner,
+  isEditingName,
+  nameInput,
+  onChangeNameInput,
+  onStartEdit,
+  onSubmitEdit,
+  onCancelEdit,
+  memberCount,
+  pieceCount,
+  collectionCount,
+  onBack,
+}: {
+  name: string;
+  isOwner: boolean;
+  isEditingName: boolean;
+  nameInput: string;
+  onChangeNameInput: (v: string) => void;
+  onStartEdit: () => void;
+  onSubmitEdit: () => void;
+  onCancelEdit: () => void;
+  memberCount: number;
+  pieceCount: number;
+  collectionCount: number;
+  onBack: () => void;
+}) {
+  return (
+    <View style={header.wrap}>
+      <View style={header.topRow}>
+        <TouchableOpacity onPress={onBack} style={header.backBtn} hitSlop={8}>
+          <Ionicons name="chevron-back" size={13} color="rgba(255,255,255,0.7)" />
+          <Text style={header.backText}>Hauses</Text>
+        </TouchableOpacity>
+
+        {isOwner && (
+          <TouchableOpacity onPress={onStartEdit} style={header.editBtn} hitSlop={8}>
+            <Ionicons name="pencil" size={12} color="rgba(255,255,255,0.7)" />
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {isEditingName ? (
+        <View style={header.editRow}>
+          <TextInput
+            value={nameInput}
+            onChangeText={onChangeNameInput}
+            onSubmitEditing={onSubmitEdit}
+            returnKeyType="done"
+            autoFocus
+            autoCapitalize="words"
+            style={header.editInput}
+          />
+          <Pressable onPress={onSubmitEdit} hitSlop={8}>
+            <Ionicons name="checkmark" size={20} color={theme.colors.ivory} />
+          </Pressable>
+          <Pressable onPress={onCancelEdit} hitSlop={8}>
+            <Ionicons name="close" size={20} color="rgba(255,255,255,0.5)" />
+          </Pressable>
+        </View>
+      ) : (
+        <Text style={header.title}>{name}</Text>
+      )}
+
+      <View style={header.factsRow}>
+        <HausFact num={memberCount} label="members" />
+        <FactDot />
+        <HausFact num={pieceCount} label="pieces" />
+        <FactDot />
+        <HausFact num={collectionCount} label="collections" />
+      </View>
+    </View>
+  );
+}
+
+// ─── ActionRow — rounded Invite / Leave buttons ──────────────────────────────
+
+function ActionRow({ onInvite, onLeave }: { onInvite: () => void; onLeave: () => void }) {
+  return (
+    <View style={action.row}>
+      <TouchableOpacity onPress={onInvite} style={action.inviteBtn}>
+        <Ionicons name="person-add-outline" size={12} color={theme.colors.yellowText} />
+        <Text style={action.inviteText}>Invite</Text>
+      </TouchableOpacity>
+      <TouchableOpacity onPress={onLeave} style={action.leaveBtn}>
+        <Ionicons name="log-out-outline" size={12} color={theme.colors.muted} />
+        <Text style={action.leaveText}>Leave</Text>
+      </TouchableOpacity>
+    </View>
+  );
+}
+
+// ─── HausTabRow — yellow-fill pills ───────────────────────────────────────────
+
+function HausTabRow({ activeTab, onTabChange }: { activeTab: Tab; onTabChange: (t: Tab) => void }) {
+  return (
+    <View style={tabs.row}>
+      {TABS.map(tab => (
+        <TouchableOpacity
+          key={tab.key}
+          onPress={() => onTabChange(tab.key)}
+          style={[tabs.pill, activeTab === tab.key && tabs.pillActive]}
+        >
+          <Text style={[tabs.label, activeTab === tab.key && tabs.labelActive]}>
+            {tab.label}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+}
+
+// ─── HausCollectionCard — 12px rounded, 2×2 mosaic cover ─────────────────────
+
+function resolveCollectionItem(id: string, closetItems: Item[]) {
+  const real = closetItems.find(i => i.id === id);
+  if (real) return { ownerId: real.owner_id as string | undefined, photoUrl: real.photo_url, thumbColor: '#E4E0D0' };
+  const mock = MOCK_HAUS_ITEMS.find(m => m.id === id);
+  if (mock) return { ownerId: mock.ownerId as string | undefined, photoUrl: undefined, thumbColor: mock.photoThumbColor };
+  return { ownerId: undefined as string | undefined, photoUrl: undefined, thumbColor: '#EEEAE0' };
+}
 
 function HausCollectionCard({
   collection,
@@ -78,40 +209,43 @@ function HausCollectionCard({
   onPress: () => void;
 }) {
   const { items: closetItems } = useCloset();
+  const resolved = collection.itemIds.map(id => resolveCollectionItem(id, closetItems));
+  const contributorCount = new Set(resolved.map(r => r.ownerId).filter(Boolean)).size;
+  const tiles = [0, 1, 2, 3].map(i => resolved[i]);
   const count = collection.itemIds.length;
-
-  // Resolve up to 3 item thumbnails
-  const thumbColors = collection.itemIds.slice(0, 3).map(id => {
-    const real = closetItems.find(i => i.id === id);
-    if (real) return { color: '#E4E0D0', url: real.photo_url };
-    const mock = MOCK_HAUS_ITEMS.find(m => m.id === id);
-    return { color: mock?.photoThumbColor ?? '#E4E0D0', url: undefined };
-  });
-  // Pad to 3
-  while (thumbColors.length < 3) thumbColors.push({ color: '#EEEAE0', url: undefined });
 
   return (
     <TouchableOpacity onPress={onPress} style={coll.card} activeOpacity={0.85}>
-      <View style={coll.thumbRow}>
-        {thumbColors.map((t, i) => (
-          <View key={i} style={[coll.thumb, { backgroundColor: t.color }]}>
-            {t.url ? (
-              <Image source={{ uri: t.url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      <View style={coll.mosaic}>
+        {tiles.map((tile, i) => (
+          <View
+            key={i}
+            style={[
+              coll.tile,
+              { backgroundColor: tile?.thumbColor ?? '#EEEAE0' },
+              i % 2 === 0 && coll.tileRightBorder,
+              i < 2 && coll.tileBottomBorder,
+            ]}
+          >
+            {tile?.photoUrl ? (
+              <Image source={{ uri: tile.photoUrl }} style={StyleSheet.absoluteFill} resizeMode="cover" />
             ) : (
-              <Ionicons name="shirt-outline" size={11} color="#14120C" style={{ opacity: 0.12 }} />
+              <Ionicons name="shirt-outline" size={18} color={theme.colors.ink} style={{ opacity: 0.15 }} />
             )}
           </View>
         ))}
       </View>
       <View style={coll.cardBody}>
         <Text numberOfLines={1} style={coll.cardName}>{collection.name}</Text>
-        <Text style={coll.cardCount}>{count} item{count !== 1 ? 's' : ''}</Text>
+        <Text style={coll.cardCount}>
+          {count} item{count !== 1 ? 's' : ''} · {contributorCount} contributor{contributorCount !== 1 ? 's' : ''}
+        </Text>
       </View>
     </TouchableOpacity>
   );
 }
 
-// ─── HausCollectionsGrid ─────────────────────────────────────────────────────
+// ─── HausCollectionsGrid — Collections as dominant content ───────────────────
 
 function HausCollectionsGrid({
   hausId,
@@ -124,65 +258,86 @@ function HausCollectionsGrid({
   onCollectionPress: (c: HausCollection) => void;
   onCreatePress: () => void;
 }) {
-  // 2-col grid: new-collection dashed card first, then collection cards
-  type GridItem =
-    | { type: 'new' }
-    | { type: 'coll'; collection: HausCollection };
-
-  const allCards: GridItem[] = [
-    { type: 'new' },
-    ...collections.map(c => ({ type: 'coll' as const, collection: c })),
-  ];
-
-  const rows: GridItem[][] = [];
-  for (let i = 0; i < allCards.length; i += 2) {
-    rows.push(allCards.slice(i, i + 2));
-  }
-
-  if (collections.length === 0) {
-    return (
-      <View style={coll.wrapper}>
-        <TouchableOpacity onPress={onCreatePress} style={coll.newCard} activeOpacity={0.85}>
-          <Ionicons name="add" size={20} color={theme.colors.muted} />
-          <Text style={coll.newCardText}>NEW COLLECTION</Text>
-        </TouchableOpacity>
-        <View style={coll.emptyWrap}>
-          <Text style={coll.emptyText}>Create your first collection to start curating together.</Text>
-        </View>
-      </View>
-    );
-  }
-
   return (
     <View style={coll.wrapper}>
-      {rows.map((row, ri) => (
-        <View key={ri} style={coll.row}>
-          {row.map((item, ci) => {
-            if (item.type === 'new') {
-              return (
-                <TouchableOpacity
-                  key="new"
-                  onPress={onCreatePress}
-                  style={coll.newCard}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name="add" size={20} color={theme.colors.muted} />
-                  <Text style={coll.newCardText}>NEW COLLECTION</Text>
-                </TouchableOpacity>
-              );
-            }
-            return (
-              <HausCollectionCard
-                key={item.collection.id}
-                collection={item.collection}
-                onPress={() => onCollectionPress(item.collection)}
-              />
-            );
-          })}
-          {row.length === 1 && <View style={coll.card} />}
-        </View>
-      ))}
+      <View style={coll.headerRow}>
+        <Text style={coll.headerLabel}>Collections</Text>
+        <Text style={coll.headerCount}>{collections.length} total</Text>
+      </View>
+
+      <View style={coll.grid}>
+        {collections.map(c => (
+          <View key={c.id} style={coll.gridItem}>
+            <HausCollectionCard collection={c} onPress={() => onCollectionPress(c)} />
+          </View>
+        ))}
+
+        <TouchableOpacity
+          onPress={onCreatePress}
+          style={[coll.gridItem, coll.newCard]}
+          activeOpacity={0.85}
+        >
+          <Ionicons name="add" size={22} color={theme.colors.ivoryMid} />
+          <Text style={coll.newCardText}>New Collection</Text>
+        </TouchableOpacity>
+      </View>
     </View>
+  );
+}
+
+// ─── HausItemGrid — All Items tab, sharp grid with owner badges ─────────────
+
+function HausItemGrid({
+  items,
+  myId,
+  myInitials,
+  onItemPress,
+}: {
+  items: Item[];
+  myId?: string;
+  myInitials: string;
+  onItemPress: (item: Item) => void;
+}) {
+  return (
+    <>
+      <View style={itemGrid.header}>
+        <Text style={itemGrid.headerLabel}>All Items</Text>
+        <Text style={itemGrid.headerCount}>{items.length} pieces</Text>
+      </View>
+
+      <View style={itemGrid.grid}>
+        {items.map(item => {
+          const isMine = !!myId && item.owner_id === myId;
+          const initials = item.owner?.display_name
+            ? item.owner.display_name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+            : isMine ? myInitials : '?';
+          return (
+            <TouchableOpacity key={item.id} style={itemGrid.cell} onPress={() => onItemPress(item)}>
+              <View style={itemGrid.photo}>
+                <View style={itemGrid.tagWrap}>
+                  <StatusTag status={item.status} />
+                </View>
+                {item.photo_url ? (
+                  <Image source={{ uri: item.photo_url }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+                ) : (
+                  <Ionicons name="shirt-outline" size={16} color={theme.colors.ink} style={{ opacity: 0.12 }} />
+                )}
+                <View style={[
+                  itemGrid.ownerBadge,
+                  { backgroundColor: isMine ? theme.colors.yellow : theme.colors.ivoryMid },
+                ]}>
+                  <Text style={itemGrid.ownerInitials}>{initials}</Text>
+                </View>
+              </View>
+              <View style={itemGrid.cellBody}>
+                <Text numberOfLines={1} style={itemGrid.cellName}>{item.name}</Text>
+                <Text style={itemGrid.cellPrice}>${(item.price_per_day / 100).toFixed(2)}/day</Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </>
   );
 }
 
@@ -219,7 +374,7 @@ export default function HausDetailScreen() {
   const { haus } = route.params;
   const { items: allItems, updateItem } = useCloset();
   const { leaveHaus, renameHaus } = useHauses();
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const { getCollectionsForHaus } = useHausCollections();
 
   const [activeTab,    setActiveTab]    = useState<Tab>('items');
@@ -231,9 +386,19 @@ export default function HausDetailScreen() {
   const [localName,     setLocalName]     = useState(haus.name);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput,     setNameInput]     = useState(haus.name);
+  const [isOwner,       setIsOwner]       = useState(false);
   const [members, setMembers] = useState<InviteMember[]>([
     { id: 'me', name: 'You', handle: '@you', initials: 'ME', isYou: true },
   ]);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) { setIsOwner(false); return; }
+    fetchMembershipRole(haus.id, user.id)
+      .then(role => { if (!cancelled) setIsOwner(role === 'admin'); })
+      .catch(() => { if (!cancelled) setIsOwner(false); });
+    return () => { cancelled = true; };
+  }, [haus.id, user?.id]);
 
   const hausItems = allItems.filter(item => item.haus_visibility?.[haus.id] === true);
   const filteredItems = hausItems.filter(item => {
@@ -242,7 +407,9 @@ export default function HausDetailScreen() {
     return true;
   });
   const collections = getCollectionsForHaus(haus.id);
-  const words = localName.split(' ').slice(0, 3);
+  const myInitials = profile?.display_name
+    ? profile.display_name.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase()
+    : 'ME';
 
   async function handleRename() {
     const trimmed = nameInput.trim();
@@ -295,121 +462,33 @@ export default function HausDetailScreen() {
     }
   }
 
-  // Manual 2-col item grid rows
-  const itemRows: Item[][] = [];
-  for (let i = 0; i < filteredItems.length; i += 2) {
-    itemRows.push(filteredItems.slice(i, i + 2));
-  }
-
   const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
 
-        {/* Back */}
-        <View style={styles.topBar}>
-          <Pressable onPress={() => navigation.goBack()}>
-            <Text style={styles.backText}>← BACK</Text>
-          </Pressable>
-        </View>
+        <HausHeader
+          name={localName}
+          isOwner={isOwner}
+          isEditingName={isEditingName}
+          nameInput={nameInput}
+          onChangeNameInput={setNameInput}
+          onStartEdit={() => { setNameInput(localName); setIsEditingName(true); }}
+          onSubmitEdit={handleRename}
+          onCancelEdit={() => setIsEditingName(false)}
+          memberCount={haus.member_count}
+          pieceCount={hausItems.length}
+          collectionCount={collections.length}
+          onBack={() => navigation.goBack()}
+        />
 
-        {/* Hero card */}
-        <View style={styles.heroCard}>
-          <View style={styles.avatarStack}>
-            {words.map((word, i) => (
-              <View
-                key={i}
-                style={[
-                  styles.avatar,
-                  { backgroundColor: i === 0 ? theme.colors.yellow : theme.colors.ivoryMid },
-                  i > 0 && { marginLeft: -12 },
-                ]}
-              >
-                <Text style={styles.avatarInitial}>{getInitial(word)}</Text>
-              </View>
-            ))}
-          </View>
+        <ActionRow
+          onInvite={() => setInviteVisible(true)}
+          onLeave={() => setLeaveVisible(true)}
+        />
 
-          {isEditingName ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-              <TextInput
-                value={nameInput}
-                onChangeText={setNameInput}
-                onSubmitEditing={handleRename}
-                returnKeyType="done"
-                autoFocus
-                autoCapitalize="words"
-                style={[styles.hausName, {
-                  flex: 1, borderBottomWidth: 1.5,
-                  borderBottomColor: theme.colors.ink,
-                  paddingVertical: 2,
-                }]}
-              />
-              <Pressable onPress={handleRename} hitSlop={8}>
-                <Ionicons name="checkmark" size={20} color={theme.colors.ink} />
-              </Pressable>
-              <Pressable onPress={() => setIsEditingName(false)} hitSlop={8}>
-                <Ionicons name="close" size={20} color={theme.colors.muted} />
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              onPress={() => { setNameInput(localName); setIsEditingName(true); }}
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}
-            >
-              <Text style={styles.hausName}>{localName.toUpperCase()}</Text>
-              <Ionicons name="pencil-outline" size={18} color={theme.colors.muted} />
-            </Pressable>
-          )}
-
-          {haus.description ? (
-            <Text style={styles.description}>{haus.description}</Text>
-          ) : null}
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaPill}>
-              <Text style={styles.metaValue}>{haus.member_count}</Text>
-              <Text style={styles.metaLabel}>MEMBERS</Text>
-            </View>
-            <View style={styles.metaDivider} />
-            <View style={styles.metaPill}>
-              <Text style={styles.metaValue}>{hausItems.length}</Text>
-              <Text style={styles.metaLabel}>PIECES</Text>
-            </View>
-            <View style={styles.metaDivider} />
-            <View style={styles.metaPill}>
-              <Text style={styles.metaValue}>{collections.length}</Text>
-              <Text style={styles.metaLabel}>COLLECTIONS</Text>
-            </View>
-          </View>
-
-          <View style={styles.actionRow}>
-            <Pressable style={styles.inviteBtn} onPress={() => setInviteVisible(true)}>
-              <Ionicons name="person-add-outline" size={14} color={theme.colors.yellowText} />
-              <Text style={styles.inviteBtnText}>INVITE FRIENDS</Text>
-            </Pressable>
-            <Pressable style={styles.leaveBtn} onPress={() => setLeaveVisible(true)}>
-              <Ionicons name="exit-outline" size={14} color="#C0392B" />
-              <Text style={styles.leaveBtnText}>LEAVE HAUS</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* ── Tab Bar ── */}
-        <View style={styles.tabBar}>
-          {TABS.map(tab => (
-            <TouchableOpacity
-              key={tab.key}
-              onPress={() => setActiveTab(tab.key)}
-              style={[styles.tabBtn, activeTab === tab.key && styles.tabBtnActive]}
-            >
-              <Text style={[styles.tabLabel, activeTab === tab.key && styles.tabLabelActive]}>
-                {tab.label}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        <HausTabRow activeTab={activeTab} onTabChange={setActiveTab} />
 
         {/* ── All Items tab ── */}
         {activeTab === 'items' && (
@@ -436,21 +515,12 @@ export default function HausDetailScreen() {
                 </View>
               </View>
             ) : (
-              <View style={styles.itemGrid}>
-                {itemRows.map((row, ri) => (
-                  <View key={ri} style={styles.itemRow}>
-                    {row.map(item => (
-                      <View key={item.id} style={{ flex: 1 }}>
-                        <ItemCard
-                          item={item}
-                          onPress={() => navigation.navigate('ItemDetail', { item })}
-                        />
-                      </View>
-                    ))}
-                    {row.length === 1 && <View style={{ flex: 1 }} />}
-                  </View>
-                ))}
-              </View>
+              <HausItemGrid
+                items={filteredItems}
+                myId={user?.id}
+                myInitials={myInitials}
+                onItemPress={item => navigation.navigate('ItemDetail', { item })}
+              />
             )}
           </>
         )}
@@ -472,6 +542,16 @@ export default function HausDetailScreen() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+
+      {/* ── Floating add-items button ── */}
+      <Pressable
+        onPress={() => navigation.navigate('AddItemsToHaus', { hausId: haus.id, hausName: localName })}
+        hitSlop={4}
+        style={fab.button}
+      >
+        <Ionicons name="add" size={20} color={theme.colors.yellowText} />
+        <Text style={fab.label}>ADD ITEMS</Text>
+      </Pressable>
 
       {/* ── Invite Modal ── */}
       <Modal
@@ -666,94 +746,11 @@ const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: theme.colors.ivory },
   scroll: { paddingBottom: 32 },
 
-  topBar: { paddingHorizontal: theme.spacing.md, paddingVertical: 12 },
-  backText: {
-    fontFamily: theme.fonts.barlowBold, fontSize: 11,
-    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.5,
-  },
-
-  heroCard: {
-    marginHorizontal: theme.spacing.md, marginBottom: 0,
-    padding: 20, borderWidth: 1.5, borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius, backgroundColor: theme.colors.ivory,
-  },
-  avatarStack: { flexDirection: 'row', alignItems: 'center', marginBottom: 12 },
-  avatar: {
-    width: 36, height: 36, borderRadius: 18,
-    alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1.5, borderColor: theme.colors.ivory,
-  },
-  avatarInitial: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 13, color: theme.colors.ink },
-  hausName: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 22,
-    color: theme.colors.ink, letterSpacing: 2,
-    textTransform: 'uppercase', marginBottom: 6,
-  },
-  description: {
-    fontFamily: theme.fonts.interLight, fontSize: 13,
-    color: theme.colors.muted, lineHeight: 19, marginBottom: 16,
-  },
-  metaRow: { flexDirection: 'row', alignItems: 'center', marginTop: 4, marginBottom: 20 },
-  metaPill: { alignItems: 'center' },
-  metaDivider: {
-    width: 1, height: 24, backgroundColor: theme.colors.ivoryMid,
-    marginHorizontal: 12,
-  },
-  metaValue: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 18, color: theme.colors.ink },
-  metaLabel: {
-    fontFamily: theme.fonts.barlowBold, fontSize: 8,
-    color: theme.colors.muted, letterSpacing: 1.5,
-    textTransform: 'uppercase', marginTop: 1,
-  },
-
-  actionRow: { flexDirection: 'row', gap: 10 },
-  inviteBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10,
-    backgroundColor: theme.colors.yellow, borderWidth: 1.5,
-    borderColor: theme.colors.yellowBorder, borderRadius: theme.borderRadius,
-  },
-  inviteBtnText: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
-    color: theme.colors.yellowText, letterSpacing: 1, textTransform: 'uppercase',
-  },
-  leaveBtn: {
-    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
-    gap: 6, paddingVertical: 10,
-    borderWidth: 1.5, borderColor: '#C0392B',
-    borderRadius: theme.borderRadius, backgroundColor: '#FFF0EE',
-  },
-  leaveBtnText: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
-    color: '#C0392B', letterSpacing: 1, textTransform: 'uppercase',
-  },
-
-  // Tab bar
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: theme.spacing.md, marginTop: 14,
-    borderWidth: 1.5, borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius, overflow: 'hidden',
-  },
-  tabBtn: {
-    flex: 1, paddingVertical: 10, alignItems: 'center',
-    backgroundColor: theme.colors.ivory,
-  },
-  tabBtnActive: { backgroundColor: theme.colors.ink },
-  tabLabel: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9.5,
-    letterSpacing: 0.8, color: theme.colors.muted, textTransform: 'uppercase',
-  },
-  tabLabelActive: { color: theme.colors.ivory },
-
   // Items tab
   filterRow: {
     flexDirection: 'row', gap: 8,
     paddingHorizontal: theme.spacing.md, paddingVertical: 12,
   },
-  itemGrid: { paddingHorizontal: theme.spacing.md, gap: 10 },
-  itemRow: { flexDirection: 'row', gap: 10 },
-
   emptyWrap: { paddingHorizontal: theme.spacing.md, paddingTop: 16 },
   emptyCard: {
     borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
@@ -771,51 +768,187 @@ const styles = StyleSheet.create({
   },
 });
 
+const fab = StyleSheet.create({
+  button: {
+    position: 'absolute', bottom: 24, right: 20,
+    flexDirection: 'row', alignItems: 'center', gap: 4,
+    paddingVertical: 12, paddingHorizontal: 18,
+    backgroundColor: theme.colors.yellow,
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: 28,
+    shadowColor: theme.colors.ink,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  label: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 12,
+    letterSpacing: 1, color: theme.colors.yellowText,
+  },
+});
+
+const header = StyleSheet.create({
+  wrap: {
+    backgroundColor: theme.colors.ink,
+    paddingTop: 36, paddingHorizontal: theme.spacing.md, paddingBottom: 36,
+  },
+  topRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    marginBottom: 20,
+  },
+  backBtn: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  backText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
+    letterSpacing: 1, textTransform: 'uppercase', color: 'rgba(255,255,255,0.7)',
+  },
+  editBtn: {
+    width: 26, height: 26, borderRadius: 2,
+    borderWidth: 1.5, borderColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  title: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 22,
+    letterSpacing: 0.4, textTransform: 'uppercase',
+    color: theme.colors.ivory, lineHeight: 23, marginBottom: 2,
+  },
+  editRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 },
+  editInput: {
+    flex: 1, fontFamily: theme.fonts.barlowExtraBold, fontSize: 22,
+    letterSpacing: 0.4, textTransform: 'uppercase', color: theme.colors.ivory,
+    borderBottomWidth: 1.5, borderBottomColor: theme.colors.ivory, paddingVertical: 2,
+  },
+  factsRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  fact: { fontFamily: theme.fonts.interRegular, fontSize: 11, color: theme.colors.yellow },
+  factNum: { fontFamily: theme.fonts.interSemiBold },
+  dot: { width: 3, height: 3, borderRadius: 1.5, backgroundColor: 'rgba(255,255,173,0.4)' },
+});
+
+const action = StyleSheet.create({
+  row: { flexDirection: 'row', gap: 7, paddingHorizontal: theme.spacing.md, paddingVertical: 10 },
+  inviteBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    backgroundColor: theme.colors.yellow, borderWidth: 1.5, borderColor: '#C8C820',
+    borderRadius: 10, paddingVertical: 8,
+  },
+  inviteText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    letterSpacing: 0.6, textTransform: 'uppercase', color: theme.colors.yellowText,
+  },
+  leaveBtn: {
+    flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5,
+    backgroundColor: 'transparent', borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
+    borderRadius: 10, paddingVertical: 8,
+  },
+  leaveText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
+    letterSpacing: 0.6, textTransform: 'uppercase', color: theme.colors.muted,
+  },
+});
+
+const tabs = StyleSheet.create({
+  row: {
+    flexDirection: 'row', paddingHorizontal: theme.spacing.md,
+    borderBottomWidth: 1.5, borderBottomColor: theme.colors.ink,
+    gap: 6, alignItems: 'center',
+  },
+  pill: {
+    paddingVertical: 6, paddingHorizontal: 12, borderRadius: theme.borderRadius, marginVertical: 6,
+    backgroundColor: 'transparent',
+  },
+  pillActive: { backgroundColor: theme.colors.yellow },
+  label: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10,
+    letterSpacing: 0.8, textTransform: 'uppercase', color: theme.colors.muted,
+  },
+  labelActive: { color: theme.colors.yellowText },
+});
+
+const itemGrid = StyleSheet.create({
+  header: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: theme.spacing.md, paddingTop: 18, paddingBottom: 8,
+  },
+  headerLabel: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 12,
+    letterSpacing: 1, textTransform: 'uppercase', color: theme.colors.ink,
+  },
+  headerCount: { fontFamily: theme.fonts.interRegular, fontSize: 10, color: theme.colors.muted },
+
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap',
+    borderWidth: 1.5, borderColor: theme.colors.ink, borderRadius: theme.borderRadius,
+    overflow: 'hidden', backgroundColor: theme.colors.ink,
+    marginHorizontal: theme.spacing.md, marginBottom: 16,
+  },
+  cell: { width: '33.333%' },
+  photo: {
+    aspectRatio: 3 / 4, backgroundColor: theme.colors.ivoryMid,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  tagWrap: { position: 'absolute', top: 4, left: 4, zIndex: 1 },
+  ownerBadge: {
+    position: 'absolute', bottom: 4, right: 4,
+    width: 16, height: 16, borderRadius: 8,
+    borderWidth: 1, borderColor: theme.colors.ivory,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  ownerInitials: { fontFamily: theme.fonts.interSemiBold, fontSize: 6, color: theme.colors.ink },
+  cellBody: {
+    padding: 5, borderTopWidth: 0.5, borderTopColor: theme.colors.ivoryMid,
+    backgroundColor: theme.colors.ivory,
+  },
+  cellName: { fontFamily: theme.fonts.interSemiBold, fontSize: 9, color: theme.colors.ink },
+  cellPrice: { fontFamily: theme.fonts.interLight, fontSize: 9, color: theme.colors.muted },
+});
+
 const coll = StyleSheet.create({
-  wrapper: { paddingHorizontal: theme.spacing.md, paddingTop: 14, gap: 10 },
-  row: { flexDirection: 'row', gap: 10 },
+  wrapper: { paddingTop: 14 },
+  headerRow: {
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    paddingHorizontal: theme.spacing.md, paddingBottom: 8,
+  },
+  headerLabel: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 12,
+    letterSpacing: 1, textTransform: 'uppercase', color: theme.colors.ink,
+  },
+  headerCount: { fontFamily: theme.fonts.interRegular, fontSize: 10, color: theme.colors.muted },
+
+  grid: {
+    flexDirection: 'row', flexWrap: 'wrap', gap: 10,
+    paddingHorizontal: theme.spacing.md,
+  },
+  gridItem: { width: '47%' },
+
+  card: {
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    borderRadius: 12, overflow: 'hidden', backgroundColor: theme.colors.ivory,
+  },
+  mosaic: { height: 114, flexDirection: 'row', flexWrap: 'wrap' },
+  tile: { width: '50%', height: '50%', alignItems: 'center', justifyContent: 'center' },
+  tileRightBorder: { borderRightWidth: 0.5, borderRightColor: theme.colors.ink },
+  tileBottomBorder: { borderBottomWidth: 0.5, borderBottomColor: theme.colors.ink },
+  cardBody: {
+    paddingVertical: 9, paddingHorizontal: 11,
+    borderTopWidth: 0.5, borderTopColor: theme.colors.ivoryMid,
+  },
+  cardName: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 12,
+    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 2,
+  },
+  cardCount: {
+    fontFamily: theme.fonts.interLight, fontSize: 9.5,
+    color: theme.colors.muted,
+  },
 
   newCard: {
-    flex: 1, aspectRatio: 1,
-    borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
-    borderStyle: 'dashed', borderRadius: theme.borderRadius,
-    alignItems: 'center', justifyContent: 'center', gap: 6,
-    backgroundColor: theme.colors.ivory,
+    height: 165,
+    borderWidth: 1.5, borderColor: theme.colors.ivoryMid, borderStyle: 'dashed',
+    borderRadius: 12, alignItems: 'center', justifyContent: 'center', gap: 6,
   },
   newCardText: {
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
     color: theme.colors.muted, letterSpacing: 1, textTransform: 'uppercase',
-  },
-
-  card: {
-    flex: 1,
-    borderWidth: 1.5, borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius, overflow: 'hidden',
-    backgroundColor: theme.colors.ivory,
-  },
-  thumbRow: { flexDirection: 'row' },
-  thumb: {
-    flex: 1, aspectRatio: 1,
-    alignItems: 'center', justifyContent: 'center',
-    borderRightWidth: 0.5, borderColor: theme.colors.ink,
-  },
-  cardBody: {
-    paddingVertical: 8, paddingHorizontal: 10,
-    borderTopWidth: 1, borderTopColor: theme.colors.ink,
-  },
-  cardName: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 10.5,
-    color: theme.colors.ink, textTransform: 'uppercase', letterSpacing: 0.4,
-  },
-  cardCount: {
-    fontFamily: theme.fonts.interLight, fontSize: 10,
-    color: theme.colors.muted, marginTop: 1,
-  },
-
-  emptyWrap: { paddingTop: 12 },
-  emptyText: {
-    fontFamily: theme.fonts.interLight, fontSize: 12,
-    color: theme.colors.muted, textAlign: 'center', lineHeight: 18,
   },
 });
 
