@@ -9,6 +9,7 @@ npm-debug.*
 *.mobileprovision
 *.orig.*
 web-build/
+.worktrees/
 .env.local
 .env
 .env.development
