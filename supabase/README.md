@@ -8,7 +8,19 @@ This directory contains Supabase database schema, migrations, and monitoring con
 supabase/
 ├── migrations/
 │   ├── 001_initial_schema.sql      # Initial schema: tables, indexes, RLS, triggers
-│   └── 002_security_fixes.sql      # Security hardening: policies, protections
+│   ├── 002_security_fixes.sql      # Security hardening: policies, protections
+│   ├── 003_add_username.sql        # users.username
+│   ├── 004_storage_policies.sql    # Storage bucket policies
+│   ├── 005_add_item_columns.sql    # Extra item columns (visibility, photos, ...)
+│   ├── 006_add_friendships.sql     # friendships
+│   ├── 007_storage_and_hauses.sql  # Storage + haus additions
+│   ├── 008_onboarding_fields.sql   # Onboarding / campus fields
+│   ├── 009_add_rentals.sql         # rentals
+│   ├── 010_fix_member_count_trigger.sql          # Repairs double-counted hauses.member_count
+│   ├── 011_add_haus_collections.sql              # haus_collections, haus_collection_items
+│   ├── 012_add_boards.sql                        # boards, board_items
+│   ├── 013_add_messages.sql                      # threads, messages, read tracking
+│   └── 014_add_interactions_and_notifications.sql # favorites, comments, notifications + triggers
 ├── seed.sql                         # Test data (dev/preview only)
 ├── monitoring.sql                   # Health check views
 └── README.md                        # This file
@@ -34,10 +46,14 @@ cat supabase/migrations/001_initial_schema.sql | pbcopy
 cat supabase/migrations/002_security_fixes.sql | pbcopy
 # Paste in SQL Editor, run
 
-# Step 3: Run seed (optional, dev only)
+# Steps 3-14: repeat for 003 ... 014, strictly in numeric order
+
+# Last: run seed (optional, dev only — after ALL migrations)
 cat supabase/seed.sql | pbcopy
 # Paste in SQL Editor, run
 ```
+
+Apply migrations **in numeric order** — later files depend on earlier ones (e.g. 013 references `items`, 014 references `friendships` and `messages`). Migrations 010–014 only add objects or repair data; none drops or alters an existing column.
 
 ### 3. Run Monitoring Setup
 ```bash
@@ -99,6 +115,12 @@ alter table public.items drop column if exists new_column;
 - **items**: Rental items (clothing, accessories, etc.)
 - **hauses**: Collective groups of users sharing closets
 - **haus_memberships**: Membership in hauses with roles
+- **friendships**, **rentals**: Friend graph and borrow/lend records (migrations 006, 009)
+- **haus_collections**, **haus_collection_items**: Curated groupings of items inside a haus (011)
+- **boards**, **board_items**: A user's personal groupings of their own items (012)
+- **threads**, **messages**: Direct-message conversations, optionally about an item (013)
+- **item_favorites**, **item_comments**: Favourites and comments on items (014)
+- **notifications**: Per-user feed, written only by triggers (014)
 
 ### Key Features
 - UUID primary keys (globally unique, collision-free)
@@ -128,9 +150,23 @@ select * from public.v_user_activity order by items_listed desc;
 -- Haus collective health
 select * from public.v_haus_health;
 
--- RLS policy verification
+-- RLS audit: every public table, whether RLS is enabled, and its policy count
+-- (all rows should show rls_status = 'enabled')
 select * from public.v_rls_policy_status;
+
+-- Hauses whose member_count has drifted from real memberships (expect zero rows)
+select * from public.v_member_count_drift;
+
+-- Collections and curated items per haus
+select * from public.v_haus_collections_health;
+
+-- Notifications per day/type, last 30 days — a spike means a runaway trigger
+select * from public.v_notification_volume;
 ```
+
+The four views added or rewritten in the latest `monitoring.sql` are revoked from the `anon` and
+`authenticated` roles. Views run with their owner's privileges and bypass RLS, so run these from
+the SQL Editor or with the service role — not from the client app.
 
 Run these weekly to track platform health.
 
