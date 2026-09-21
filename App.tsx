@@ -7,6 +7,7 @@ import { Inter_300Light, Inter_400Regular, Inter_600SemiBold } from '@expo-googl
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import './src/lib/webAlert'; // makes Alert.alert work on web (React Native Web's is a no-op)
 
 SplashScreen.preventAutoHideAsync();
 
