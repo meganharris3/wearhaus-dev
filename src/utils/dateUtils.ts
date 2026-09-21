@@ -99,3 +99,24 @@ export function firstDayOfMonth(year: number, month: number): number {
 export function addMonths(d: Date, delta: number): Date {
   return new Date(d.getFullYear(), d.getMonth() + delta, 1);
 }
+
+const WEEKDAY_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+const MONTH_SHORT = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** Chat-style timestamp from an ISO string: 'Just now', '3:05 PM', 'Yesterday', 'Fri', 'Aug 4' */
+export function formatMessageTime(iso: string, now: Date = new Date()): string {
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+
+  if (now.getTime() - d.getTime() < 60_000) return 'Just now';
+
+  const dayDiff = Math.round((startOfDay(now).getTime() - startOfDay(d).getTime()) / 86_400_000);
+  if (dayDiff === 0) {
+    const h = d.getHours();
+    const m = String(d.getMinutes()).padStart(2, '0');
+    return `${h % 12 === 0 ? 12 : h % 12}:${m} ${h < 12 ? 'AM' : 'PM'}`;
+  }
+  if (dayDiff === 1) return 'Yesterday';
+  if (dayDiff < 7) return WEEKDAY_SHORT[d.getDay()];
+  return `${MONTH_SHORT[d.getMonth()]} ${d.getDate()}`;
+}
