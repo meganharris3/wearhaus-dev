@@ -22,7 +22,9 @@ src/App.jsx
 src/index.css
 src/main.jsx
 src/layouts/
-src/data/
+# Legacy mock data — but campusDomains.ts is live code (auth/onboarding), so it stays tracked
+src/data/*
+!src/data/campusDomains.ts
 src/context/AppContext.jsx
 src/components/*.jsx
 src/screens/*.jsx
