@@ -6,12 +6,17 @@ import { theme } from '../theme';
 import AuthStack from './AuthStack';
 import AppStack from './AppStack';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
+import { useDevAutoSignIn } from '../hooks/useDevAutoSignIn';
 
-const DEV_BYPASS = true; // set false to re-enable auth
+// Dev builds skip the login screens. Set to false to require login. Never true in a production build.
+const DEV_BYPASS = __DEV__;
 
 export default function RootNavigator() {
-  const { session, profile, loading } = useAuth();
+  const { session, profile, loading, signIn } = useAuth();
   const [showAuth, setShowAuth] = useState(false);
+
+  // The bypass has no session of its own, so sign in behind the scenes (see the hook).
+  useDevAutoSignIn({ enabled: DEV_BYPASS, loading, hasSession: !!session, signIn });
 
   if (DEV_BYPASS) {
     return (
