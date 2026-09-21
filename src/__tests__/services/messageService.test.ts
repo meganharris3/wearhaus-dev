@@ -30,6 +30,7 @@ import {
   updateMessagePayload,
   updateThreadStatus,
   markThreadRead,
+  respondToBorrowRequest,
 } from '../../services/messageService';
 
 beforeEach(() => { jest.clearAllMocks(); });
@@ -325,5 +326,55 @@ describe('markThreadRead', () => {
   it('throws on RPC error', async () => {
     mockRpc.mockResolvedValue({ data: null, error: { message: 'rpc failed' } });
     await expect(markThreadRead('t1')).rejects.toThrow('rpc failed');
+  });
+});
+
+describe('respondToBorrowRequest', () => {
+  it('rewrites the request status, then posts a system message as the responder', async () => {
+    const read = makeChain({ data: { payload: { status: 'pending', lenderFirstName: 'Maya', days: 2 } }, error: null });
+    const update = makeChain({ data: null, error: null });
+    const insert = makeChain({
+      data: { id: 'm9', thread_id: 't1', sender_id: 'lender', type: 'system', text: 'Maya accepted the request', payload: null, created_at: '2026-01-01' },
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(read).mockReturnValueOnce(update).mockReturnValueOnce(insert);
+
+    await respondToBorrowRequest('m1', 't1', 'lender', 'accepted', 'Maya');
+
+    expect(read.eq).toHaveBeenCalledWith('id', 'm1');
+    expect(update.update).toHaveBeenCalledWith({
+      payload: { status: 'accepted', lenderFirstName: 'Maya', days: 2 },
+    });
+    expect(update.eq).toHaveBeenCalledWith('id', 'm1');
+    expect(insert.insert).toHaveBeenCalledWith({
+      thread_id: 't1', sender_id: 'lender', type: 'system', text: 'Maya accepted the request', payload: null,
+    });
+  });
+
+  it('words a decline correctly', async () => {
+    const read = makeChain({ data: { payload: {} }, error: null });
+    const insert = makeChain({
+      data: { id: 'm9', thread_id: 't1', sender_id: 'lender', type: 'system', text: 'x', payload: null, created_at: '2026-01-01' },
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(read).mockReturnValueOnce(makeChain({ data: null, error: null })).mockReturnValueOnce(insert);
+
+    await respondToBorrowRequest('m1', 't1', 'lender', 'declined', 'Maya');
+
+    expect(insert.insert).toHaveBeenCalledWith(expect.objectContaining({ text: 'Maya declined the request' }));
+  });
+
+  it('throws, and posts nothing, if the request cannot be read', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ data: null, error: { message: 'not found' } }));
+    await expect(respondToBorrowRequest('m1', 't1', 'lender', 'accepted', 'Maya')).rejects.toThrow('not found');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not post the system message if the status update fails', async () => {
+    mockFrom
+      .mockReturnValueOnce(makeChain({ data: { payload: {} }, error: null }))
+      .mockReturnValueOnce(makeChain({ data: null, error: { message: 'update failed' } }));
+    await expect(respondToBorrowRequest('m1', 't1', 'lender', 'accepted', 'Maya')).rejects.toThrow('update failed');
+    expect(mockFrom).toHaveBeenCalledTimes(2);
   });
 });

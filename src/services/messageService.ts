@@ -156,3 +156,25 @@ export async function markThreadRead(threadId: string): Promise<void> {
   const { error } = await supabase.rpc('mark_thread_read', { p_thread_id: threadId });
   if (error) throw new Error(error.message);
 }
+
+/**
+ * Accept or decline a borrow request from anywhere (chat card or notifications
+ * screen): rewrites the request message's status, then posts the system notice.
+ * The database trigger resolves the matching notification off the status change.
+ */
+export async function respondToBorrowRequest(
+  messageId: string,
+  threadId: string,
+  responderId: string,
+  status: 'accepted' | 'declined',
+  lenderFirstName: string,
+): Promise<void> {
+  const { data, error } = await supabase.from('messages').select('payload').eq('id', messageId).single();
+  if (error) throw new Error(error.message);
+
+  await updateMessagePayload(messageId, { ...(data.payload as object), status });
+  await sendMessage(threadId, responderId, {
+    type: 'system',
+    text: `${lenderFirstName} ${status} the request`,
+  });
+}
