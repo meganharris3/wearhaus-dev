@@ -80,3 +80,29 @@ export async function fetchHausMembers(hausId: string) {
   if (error) throw new Error(error.message);
   return data ?? [];
 }
+
+export interface HausMemberRow {
+  userId: string;
+  role: 'member' | 'admin';
+  joinedAt: string;
+  displayName: string;
+  avatarUrl?: string;
+}
+
+export async function fetchAllHausMembers(hausId: string): Promise<HausMemberRow[]> {
+  const { data, error } = await supabase
+    .from('haus_memberships')
+    .select(`user_id, role, joined_at, user:users(id, display_name, avatar_url)`)
+    .eq('haus_id', hausId)
+    .order('joined_at', { ascending: true });
+
+  if (error) throw new Error(error.message);
+
+  return (data ?? []).map((row: any) => ({
+    userId:      row.user_id,
+    role:        row.role,
+    joinedAt:    row.joined_at,
+    displayName: row.user?.display_name ?? 'Member',
+    avatarUrl:   row.user?.avatar_url ?? undefined,
+  }));
+}

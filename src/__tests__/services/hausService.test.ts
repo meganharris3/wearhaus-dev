@@ -36,6 +36,7 @@ import {
   fetchMyHauses,
   fetchAllHauses,
   fetchHausMembers,
+  fetchAllHausMembers,
   createHaus,
   leaveHaus,
 } from '../../services/hausService';
@@ -170,6 +171,58 @@ describe('fetchHausMembers', () => {
     mockFrom.mockReturnValue(chain);
 
     await fetchHausMembers('h1');
+
+    expect(chain.order).toHaveBeenCalledWith('joined_at', { ascending: true });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchAllHausMembers
+// ---------------------------------------------------------------------------
+describe('fetchAllHausMembers', () => {
+  it('maps membership rows to HausMemberRow without a row limit', async () => {
+    const data = [
+      { user_id: 'u1', role: 'admin', joined_at: '2024-01-01', user: { id: 'u1', display_name: 'Maya Chen', avatar_url: 'https://x/a.png' } },
+      { user_id: 'u2', role: 'member', joined_at: '2024-02-01', user: { id: 'u2', display_name: 'Jo', avatar_url: null } },
+    ];
+    const chain = makeChain({ data, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await fetchAllHausMembers('h1');
+
+    expect(mockFrom).toHaveBeenCalledWith('haus_memberships');
+    expect(chain.eq).toHaveBeenCalledWith('haus_id', 'h1');
+    expect(chain.limit).not.toHaveBeenCalled();
+    expect(result).toEqual([
+      { userId: 'u1', role: 'admin', joinedAt: '2024-01-01', displayName: 'Maya Chen', avatarUrl: 'https://x/a.png' },
+      { userId: 'u2', role: 'member', joinedAt: '2024-02-01', displayName: 'Jo', avatarUrl: undefined },
+    ]);
+  });
+
+  it("falls back to 'Member' when the joined user row is missing", async () => {
+    mockFrom.mockReturnValue(makeChain({
+      data: [{ user_id: 'u3', role: 'member', joined_at: '2024-03-01', user: null }],
+      error: null,
+    }));
+    const result = await fetchAllHausMembers('h1');
+    expect(result[0].displayName).toBe('Member');
+  });
+
+  it('returns empty array when data is null', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
+    expect(await fetchAllHausMembers('h1')).toEqual([]);
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'Not found' } }));
+    await expect(fetchAllHausMembers('h1')).rejects.toThrow('Not found');
+  });
+
+  it('orders members by joined_at ascending', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchAllHausMembers('h1');
 
     expect(chain.order).toHaveBeenCalledWith('joined_at', { ascending: true });
   });

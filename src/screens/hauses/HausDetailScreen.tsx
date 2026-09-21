@@ -28,7 +28,7 @@ import {
   useHausCollections,
   type HausCollection,
 } from '../../context/HausCollectionsContext';
-import { fetchMembershipRole } from '../../services/hausService';
+import { fetchMembershipRole, fetchAllHausMembers, type HausMemberRow } from '../../services/hausService';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
@@ -48,14 +48,6 @@ const TABS: { key: Tab; label: string }[] = [
   { key: 'collections', label: 'Collections' },
   { key: 'members',     label: 'Members' },
 ];
-
-interface InviteMember {
-  id: string;
-  name: string;
-  handle: string;
-  initials: string;
-  isYou: boolean;
-}
 
 function showToast(msg: string) {
   if (Platform.OS === 'android') {
@@ -345,25 +337,36 @@ function HausItemGrid({
 
 // ─── HausMembersList ─────────────────────────────────────────────────────────
 
-function HausMembersList({ members }: { members: InviteMember[] }) {
+function HausMembersList({ members, myId }: { members: HausMemberRow[]; myId?: string }) {
+  if (members.length === 0) {
+    return <Text style={mem.empty}>No members yet.</Text>;
+  }
   return (
     <View style={{ paddingTop: 4 }}>
-      {members.map(m => (
-        <View key={m.id} style={mem.row}>
-          <View style={[mem.avatar, m.isYou && mem.avatarSelf]}>
-            <Text style={mem.initials}>{m.initials}</Text>
-          </View>
-          <View style={{ flex: 1 }}>
-            <Text style={mem.name}>{m.name}</Text>
-            <Text style={mem.handle}>{m.handle}</Text>
-          </View>
-          {m.isYou && (
-            <View style={mem.youBadge}>
-              <Text style={mem.youBadgeText}>YOU</Text>
+      {members.map(m => {
+        const isYou = !!myId && m.userId === myId;
+        const initials = m.displayName.trim().split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase();
+        return (
+          <View key={m.userId} style={mem.row}>
+            <View style={[mem.avatar, isYou && mem.avatarSelf]}>
+              {m.avatarUrl ? (
+                <Image source={{ uri: m.avatarUrl }} style={mem.avatarImg} resizeMode="cover" />
+              ) : (
+                <Text style={mem.initials}>{initials}</Text>
+              )}
             </View>
-          )}
-        </View>
-      ))}
+            <View style={{ flex: 1 }}>
+              <Text style={mem.name}>{m.displayName}</Text>
+              <Text style={mem.handle}>{m.role === 'admin' ? 'Admin' : 'Member'}</Text>
+            </View>
+            {isYou && (
+              <View style={mem.youBadge}>
+                <Text style={mem.youBadgeText}>YOU</Text>
+              </View>
+            )}
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -383,15 +386,12 @@ export default function HausDetailScreen() {
   const [inviteVisible, setInviteVisible] = useState(false);
   const [leaveVisible,  setLeaveVisible]  = useState(false);
   const [isLeaving,     setIsLeaving]     = useState(false);
-  const [inviteInput,   setInviteInput]   = useState('');
   const [filter,        setFilter]        = useState<ItemFilter>('all');
   const [localName,     setLocalName]     = useState(haus.name);
   const [isEditingName, setIsEditingName] = useState(false);
   const [nameInput,     setNameInput]     = useState(haus.name);
   const [isOwner,       setIsOwner]       = useState(false);
-  const [members, setMembers] = useState<InviteMember[]>([
-    { id: 'me', name: 'You', handle: '@you', initials: 'ME', isYou: true },
-  ]);
+  const [members, setMembers] = useState<HausMemberRow[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -401,6 +401,14 @@ export default function HausDetailScreen() {
       .catch(() => { if (!cancelled) setIsOwner(false); });
     return () => { cancelled = true; };
   }, [haus.id, user?.id]);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchAllHausMembers(haus.id)
+      .then(rows => { if (!cancelled) setMembers(rows); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [haus.id]);
 
   useEffect(() => {
     loadCollectionsForHaus(haus.id);
@@ -424,26 +432,6 @@ export default function HausDetailScreen() {
     const prev = localName;
     setLocalName(trimmed);
     try { await renameHaus(haus.id, trimmed); } catch { setLocalName(prev); }
-  }
-
-  function handleAddMember() {
-    const raw = inviteInput.trim();
-    if (!raw) return;
-    setMembers(prev => [
-      ...prev,
-      {
-        id:       Date.now().toString(),
-        name:     raw.replace(/^@/, ''),
-        handle:   raw.startsWith('@') ? raw : `@${raw}`,
-        initials: raw.replace('@', '').slice(0, 2).toUpperCase(),
-        isYou:    false,
-      },
-    ]);
-    setInviteInput('');
-  }
-
-  function handleRemoveMember(id: string) {
-    setMembers(prev => prev.filter(m => m.id !== id));
   }
 
   async function handleCopyLink() {
@@ -543,7 +531,7 @@ export default function HausDetailScreen() {
 
         {/* ── Members tab ── */}
         {activeTab === 'members' && (
-          <HausMembersList members={members} />
+          <HausMembersList members={members} myId={user?.id} />
         )}
 
         <View style={{ height: 40 }} />
@@ -581,45 +569,10 @@ export default function HausDetailScreen() {
             showsVerticalScrollIndicator={false}
           >
             <View style={modal.sectionHeader}>
-              <Text style={modal.sectionLabel}>ADD MEMBERS</Text>
+              <Text style={modal.sectionLabel}>IN THIS HAUS</Text>
             </View>
 
-            <View style={modal.inviteRow}>
-              <TextInput
-                value={inviteInput}
-                onChangeText={setInviteInput}
-                placeholder="@username or phone…"
-                placeholderTextColor={theme.colors.muted}
-                style={modal.inviteInput}
-                onSubmitEditing={handleAddMember}
-                returnKeyType="done"
-                autoCapitalize="none"
-              />
-              <Pressable onPress={handleAddMember} style={modal.addBtn}>
-                <Text style={modal.addBtnText}>ADD</Text>
-              </Pressable>
-            </View>
-
-            {members.map(m => (
-              <View key={m.id} style={modal.memberRow}>
-                <View style={[modal.memberAvatar, m.isYou && modal.memberAvatarSelf]}>
-                  <Text style={modal.memberInitials}>{m.initials}</Text>
-                </View>
-                <View style={modal.memberInfo}>
-                  <Text style={modal.memberName}>{m.name}</Text>
-                  <Text style={modal.memberHandle}>{m.handle}</Text>
-                </View>
-                {m.isYou ? (
-                  <View style={modal.youBadge}>
-                    <Text style={modal.youBadgeText}>YOU</Text>
-                  </View>
-                ) : (
-                  <Pressable onPress={() => handleRemoveMember(m.id)} hitSlop={8}>
-                    <Ionicons name="close" size={16} color={theme.colors.muted} />
-                  </Pressable>
-                )}
-              </View>
-            ))}
+            <HausMembersList members={members} myId={user?.id} />
 
             <View style={modal.sectionHeader}>
               <Text style={modal.sectionLabel}>SHARE INVITE</Text>
@@ -971,6 +924,8 @@ const mem = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   avatarSelf: { backgroundColor: theme.colors.yellow },
+  avatarImg: { width: 38, height: 38, borderRadius: 19 },
+  empty: { fontFamily: theme.fonts.interLight, fontSize: 12, color: theme.colors.muted, textAlign: 'center', paddingVertical: 24 },
   initials: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 12, color: theme.colors.ink },
   name: { fontFamily: theme.fonts.interSemiBold, fontSize: 13, color: theme.colors.ink },
   handle: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted, marginTop: 1 },
@@ -1007,46 +962,6 @@ const modal = StyleSheet.create({
   sectionLabel: {
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
     color: theme.colors.ink, letterSpacing: 1.5,
-  },
-
-  inviteRow: { flexDirection: 'row', gap: 8, paddingHorizontal: 18, marginBottom: 14 },
-  inviteInput: {
-    flex: 1, borderWidth: 1.5, borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius, paddingHorizontal: 12, paddingVertical: 9,
-    fontFamily: theme.fonts.interLight, fontSize: 12, color: theme.colors.ink,
-  },
-  addBtn: {
-    backgroundColor: theme.colors.ink, borderRadius: theme.borderRadius,
-    paddingHorizontal: 14, justifyContent: 'center',
-  },
-  addBtnText: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
-    letterSpacing: 1.2, textTransform: 'uppercase', color: theme.colors.ivory,
-  },
-
-  memberRow: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingHorizontal: 18, paddingVertical: 10,
-    borderBottomWidth: 0.5, borderBottomColor: theme.colors.ivoryMid, gap: 12,
-  },
-  memberAvatar: {
-    width: 34, height: 34, borderRadius: 17,
-    backgroundColor: theme.colors.ivoryMid,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  memberAvatarSelf: { backgroundColor: theme.colors.yellow },
-  memberInitials: { fontFamily: theme.fonts.barlowExtraBold, fontSize: 11, color: theme.colors.ink },
-  memberInfo: { flex: 1 },
-  memberName: { fontFamily: theme.fonts.interSemiBold, fontSize: 13, color: theme.colors.ink },
-  memberHandle: { fontFamily: theme.fonts.interLight, fontSize: 11, color: theme.colors.muted, marginTop: 1 },
-  youBadge: {
-    backgroundColor: theme.colors.yellow, borderWidth: 1.5,
-    borderColor: theme.colors.yellowBorder, borderRadius: theme.borderRadius,
-    paddingHorizontal: 8, paddingVertical: 2,
-  },
-  youBadgeText: {
-    fontFamily: theme.fonts.barlowExtraBold, fontSize: 8,
-    color: theme.colors.yellowText, letterSpacing: 1,
   },
 
   shareRow: { flexDirection: 'row', paddingHorizontal: 18, gap: 8, marginBottom: 12 },
