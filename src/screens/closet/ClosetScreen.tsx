@@ -90,7 +90,7 @@ function BoardMosaicCover({ items, coverStyle }: { items: (Item | null)[]; cover
 
 function BoardCard({ board, allItems }: { board: Board; allItems: Item[] }) {
   const items = board.itemIds.map((id) => allItems.find((i) => i.id === id) ?? null);
-  const visLabel = { public: 'Public', friends: 'Friends', private: 'Private' }[board.visibility];
+  const visLabel = { public: 'Public', friends: 'Friends', hauses: 'Hauses', private: 'Private' }[board.visibility];
   return (
     <View style={{ borderWidth: 1.5, borderColor: '#14120C', borderRadius: 12, overflow: 'hidden' }}>
       <BoardMosaicCover items={items} coverStyle={board.coverStyle} />

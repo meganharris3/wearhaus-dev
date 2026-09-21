@@ -11,6 +11,7 @@ const VIS_CONFIG: Record<VisibilityMode, {
   public:  { bg: '#14120C', icon: 'globe-outline',   iconColor: '#FDFBF4' },
   friends: { bg: '#FFFFAD', icon: 'people-outline',  iconColor: '#3A3A00', border: '#C8C820' },
   hauses:  { bg: '#F0EDE0', icon: 'home-outline',    iconColor: '#7A7762', border: '#E2DED0' },
+  private: { bg: '#E2DED0', icon: 'lock-closed-outline', iconColor: '#14120C' },
 };
 
 function VisibilityIcon({ visibility }: { visibility: VisibilityMode }) {
