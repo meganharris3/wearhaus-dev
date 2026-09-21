@@ -2,79 +2,120 @@
  * Tests for AuthContext (AuthProvider + useAuth)
  *
  * Covers:
- * - initial loading state is true, then resolves to false
- * - session and user are populated when getSession returns a session
- * - signIn success propagates null error
- * - signIn failure propagates error message
- * - signOut clears session (delegates to authService)
- * - profile is loaded alongside the session
+ * - loading resolves to false (also when getSession rejects)
+ * - session, user and profile are populated from getSession
+ * - signIn / signUp map service errors to a message string
+ * - signOut delegates to authService
+ * - onAuthStateChange: SIGNED_IN loads the profile, SIGNED_OUT clears it,
+ *   INITIAL_SESSION is ignored (already handled by getSession)
+ * - updateProfile / refreshProfile / updateCampus / completeOnboarding
  * - useAuth throws when used outside AuthProvider
  */
 import React from 'react';
-import { render, screen, act, waitFor } from '@testing-library/react-native';
+import { render, screen, act } from '@testing-library/react-native';
 import { Text } from 'react-native';
 
 // ---------------------------------------------------------------------------
-// Service mocks — set up before importing AuthProvider
+// Mocks. The jest.fn()s are created inside the factories (not as outer
+// `const mockX = jest.fn()`): babel-jest runs the imports below before those
+// consts are initialised, so a factory referencing them would see `undefined`.
+// They are read back through the mocked imports further down.
 // ---------------------------------------------------------------------------
-
-const mockGetSession       = jest.fn();
-const mockSignIn           = jest.fn();
-const mockSignUp           = jest.fn();
-const mockSignOut          = jest.fn();
-const mockFetchUserProfile = jest.fn();
-const mockOnAuthStateChange = jest.fn(() => ({
-  data: { subscription: { unsubscribe: jest.fn() } },
-}));
-
 jest.mock('../../services/authService', () => ({
-  getSession: mockGetSession,
-  signIn:     mockSignIn,
-  signUp:     mockSignUp,
-  signOut:    mockSignOut,
+  getSession: jest.fn(),
+  signIn:     jest.fn(),
+  signUp:     jest.fn(),
+  signOut:    jest.fn(),
 }));
 
 jest.mock('../../services/userService', () => ({
-  fetchUserProfile: mockFetchUserProfile,
+  fetchUserProfile:  jest.fn(),
+  updateUserProfile: jest.fn(),
+}));
+
+// campusService pulls in the campus domain data and a Supabase client; the
+// context only delegates to it, so stub it out.
+jest.mock('../../services/campusService', () => ({
+  updateUserCampus:       jest.fn(),
+  markOnboardingComplete: jest.fn(),
 }));
 
 jest.mock('../../lib/supabase', () => ({
   supabase: {
     auth: {
-      onAuthStateChange: mockOnAuthStateChange,
+      onAuthStateChange: jest.fn(),
+      getSession:        jest.fn(),
     },
   },
 }));
 
+import { supabase } from '../../lib/supabase';
+import * as authService from '../../services/authService';
+import * as userService from '../../services/userService';
+import * as campusService from '../../services/campusService';
 import { AuthProvider, useAuth } from '../../context/AuthContext';
 
+const mockGetSession        = authService.getSession as jest.Mock;
+const mockSignIn            = authService.signIn as jest.Mock;
+const mockSignUp            = authService.signUp as jest.Mock;
+const mockSignOut           = authService.signOut as jest.Mock;
+const mockFetchUserProfile  = userService.fetchUserProfile as jest.Mock;
+const mockUpdateUserProfile = userService.updateUserProfile as jest.Mock;
+const mockUpdateUserCampus  = campusService.updateUserCampus as jest.Mock;
+const mockMarkOnboarding    = campusService.markOnboardingComplete as jest.Mock;
+const mockOnAuthStateChange = supabase.auth.onAuthStateChange as jest.Mock;
+const mockLiveGetSession    = supabase.auth.getSession as jest.Mock;
+
 // ---------------------------------------------------------------------------
-// Helper component that reads from context and renders state as text
+// Helpers
 // ---------------------------------------------------------------------------
-function TestConsumer() {
-  const { loading, session, user, profile, signIn, signOut } = useAuth();
-  return (
-    <>
-      <Text testID="loading">{loading ? 'loading' : 'ready'}</Text>
-      <Text testID="userId">{user?.id ?? 'none'}</Text>
-      <Text testID="profileName">{profile?.display_name ?? 'no-profile'}</Text>
-    </>
-  );
+const PROFILE = {
+  id: 'user-1',
+  display_name: 'Maya Chen',
+  items_listed: 0,
+  rentals_completed: 0,
+  rating: 0,
+};
+const SESSION = { user: { id: 'user-1', email: 'u@test.com' }, access_token: 'tok' };
+
+/** Lets pending promises/timers run inside act() so state updates are applied. */
+async function settle() {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 
-function renderWithProvider() {
-  return render(
-    <AuthProvider>
-      <TestConsumer />
-    </AuthProvider>
-  );
+type Auth = ReturnType<typeof useAuth>;
+let auth: Auth;
+
+/** Renders a provider and captures the latest context value into `auth`. */
+async function renderProvider() {
+  function Capture() {
+    auth = useAuth();
+    return (
+      <>
+        <Text testID="loading">{auth.loading ? 'loading' : 'ready'}</Text>
+        <Text testID="userId">{auth.user?.id ?? 'none'}</Text>
+        <Text testID="profileName">{auth.profile?.display_name ?? 'no-profile'}</Text>
+      </>
+    );
+  }
+  const utils = render(<AuthProvider><Capture /></AuthProvider>);
+  await settle();
+  return utils;
 }
+
+const text = (id: string) => screen.getByTestId(id).props.children;
+
+/** The listener AuthProvider registered with supabase.auth.onAuthStateChange. */
+const authListener = () => mockOnAuthStateChange.mock.calls[0][0] as (event: string, s: unknown) => Promise<void>;
 
 beforeEach(() => {
   jest.clearAllMocks();
-  // Default: no existing session
   mockGetSession.mockResolvedValue(null);
   mockFetchUserProfile.mockResolvedValue(null);
+  mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe: jest.fn() } } });
+  mockLiveGetSession.mockResolvedValue({ data: { session: null } });
 });
 
 // ---------------------------------------------------------------------------
@@ -82,26 +123,32 @@ beforeEach(() => {
 // ---------------------------------------------------------------------------
 describe('loading state', () => {
   it('starts with loading=true and transitions to ready after getSession resolves', async () => {
-    mockGetSession.mockResolvedValue(null);
+    let resolveSession: (v: null) => void = () => {};
+    mockGetSession.mockReturnValue(new Promise((resolve) => { resolveSession = resolve; }));
 
-    renderWithProvider();
+    function Probe() {
+      const { loading } = useAuth();
+      return <Text testID="loading">{loading ? 'loading' : 'ready'}</Text>;
+    }
+    render(<AuthProvider><Probe /></AuthProvider>);
 
-    // Immediately after render, loading should be true (async not yet resolved)
-    expect(screen.getByTestId('loading').props.children).toBe('loading');
+    expect(text('loading')).toBe('loading');
 
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').props.children).toBe('ready');
-    });
+    await act(async () => { resolveSession(null); });
+
+    expect(text('loading')).toBe('ready');
   });
 
   it('becomes ready even when getSession returns null', async () => {
-    mockGetSession.mockResolvedValue(null);
+    await renderProvider();
+    expect(text('loading')).toBe('ready');
+  });
 
-    renderWithProvider();
-
-    await waitFor(() => {
-      expect(screen.getByTestId('loading').props.children).toBe('ready');
-    });
+  it('becomes ready with no user when getSession rejects', async () => {
+    mockGetSession.mockRejectedValue(new Error('network'));
+    await renderProvider();
+    expect(text('loading')).toBe('ready');
+    expect(text('userId')).toBe('none');
   });
 });
 
@@ -110,140 +157,240 @@ describe('loading state', () => {
 // ---------------------------------------------------------------------------
 describe('session initialisation', () => {
   it('populates user when getSession returns a session', async () => {
-    const fakeSession = { user: { id: 'user-1', email: 'u@test.com' }, access_token: 'tok' };
-    mockGetSession.mockResolvedValue(fakeSession);
-    mockFetchUserProfile.mockResolvedValue({
-      id: 'user-1',
-      display_name: 'Maya Chen',
-      items_listed: 0,
-      rentals_completed: 0,
-      rating: 0,
-    });
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
 
-    renderWithProvider();
+    await renderProvider();
 
-    await waitFor(() => {
-      expect(screen.getByTestId('userId').props.children).toBe('user-1');
-    });
+    expect(text('userId')).toBe('user-1');
   });
 
-  it('loads the profile when a session exists', async () => {
-    const fakeSession = { user: { id: 'user-1' }, access_token: 'tok' };
-    mockGetSession.mockResolvedValue(fakeSession);
-    mockFetchUserProfile.mockResolvedValue({
-      id: 'user-1',
-      display_name: 'Maya Chen',
-      items_listed: 1,
-      rentals_completed: 2,
-      rating: 4.9,
-    });
+  it('loads the profile for the session user', async () => {
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
 
-    renderWithProvider();
+    await renderProvider();
 
-    await waitFor(() => {
-      expect(screen.getByTestId('profileName').props.children).toBe('Maya Chen');
-    });
+    expect(mockFetchUserProfile).toHaveBeenCalledWith('user-1');
+    expect(text('profileName')).toBe('Maya Chen');
   });
 
-  it('sets userId to "none" when no session exists', async () => {
-    mockGetSession.mockResolvedValue(null);
+  it('sets userId to "none" and skips the profile fetch when no session exists', async () => {
+    await renderProvider();
 
-    renderWithProvider();
+    expect(text('userId')).toBe('none');
+    expect(mockFetchUserProfile).not.toHaveBeenCalled();
+  });
 
-    await waitFor(() => {
-      expect(screen.getByTestId('userId').props.children).toBe('none');
-    });
+  it('keeps the session when the profile fetch fails', async () => {
+    const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockRejectedValue(new Error('paused project'));
+
+    await renderProvider();
+
+    expect(text('userId')).toBe('user-1');
+    expect(text('profileName')).toBe('no-profile');
+    errorSpy.mockRestore();
   });
 });
 
 // ---------------------------------------------------------------------------
-// signIn
+// onAuthStateChange
+// ---------------------------------------------------------------------------
+describe('auth state changes', () => {
+  it('registers a listener and unsubscribes on unmount', async () => {
+    const unsubscribe = jest.fn();
+    mockOnAuthStateChange.mockReturnValue({ data: { subscription: { unsubscribe } } });
+
+    const { unmount } = await renderProvider();
+    expect(mockOnAuthStateChange).toHaveBeenCalledTimes(1);
+
+    unmount();
+    expect(unsubscribe).toHaveBeenCalled();
+  });
+
+  it('ignores INITIAL_SESSION (already handled by getSession)', async () => {
+    await renderProvider();
+
+    await act(async () => { await authListener()('INITIAL_SESSION', SESSION); });
+
+    expect(text('userId')).toBe('none');
+    expect(mockFetchUserProfile).not.toHaveBeenCalled();
+  });
+
+  it('SIGNED_IN sets the session and loads the profile', async () => {
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
+    await renderProvider();
+
+    await act(async () => { await authListener()('SIGNED_IN', SESSION); });
+
+    expect(text('userId')).toBe('user-1');
+    expect(text('profileName')).toBe('Maya Chen');
+  });
+
+  it('SIGNED_OUT clears the session and the profile', async () => {
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
+    await renderProvider();
+    expect(text('profileName')).toBe('Maya Chen');
+
+    await act(async () => { await authListener()('SIGNED_OUT', null); });
+
+    expect(text('userId')).toBe('none');
+    expect(text('profileName')).toBe('no-profile');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// signIn / signUp / signOut
 // ---------------------------------------------------------------------------
 describe('signIn', () => {
-  function SignInConsumer() {
-    const { signIn } = useAuth();
-    return (
-      <Text
-        testID="trigger"
-        onPress={() => signIn('u@test.com', 'pass').then((r) => {
-          // store result in testID for assertion
-          (global as any).__signInResult = r;
-        })}
-      >
-        sign-in
-      </Text>
-    );
-  }
-
   it('returns null error on successful sign-in', async () => {
-    mockGetSession.mockResolvedValue(null);
     mockSignIn.mockResolvedValue({ error: null });
+    await renderProvider();
 
-    render(
-      <AuthProvider>
-        <SignInConsumer />
-      </AuthProvider>
-    );
+    let result: unknown;
+    await act(async () => { result = await auth.signIn('u@test.com', 'pass'); });
 
-    await waitFor(() => screen.getByTestId('trigger'));
-
-    await act(async () => {
-      screen.getByTestId('trigger').props.onPress();
-    });
-
-    await waitFor(() => {
-      expect((global as any).__signInResult).toEqual({ error: null });
-    });
+    expect(mockSignIn).toHaveBeenCalledWith('u@test.com', 'pass');
+    expect(result).toEqual({ error: null });
   });
 
-  it('returns error message on failed sign-in', async () => {
-    mockGetSession.mockResolvedValue(null);
+  it('returns the error message on failed sign-in', async () => {
     mockSignIn.mockResolvedValue({ error: { message: 'Invalid credentials' } });
+    await renderProvider();
 
-    render(
-      <AuthProvider>
-        <SignInConsumer />
-      </AuthProvider>
-    );
+    let result: unknown;
+    await act(async () => { result = await auth.signIn('u@test.com', 'bad'); });
 
-    await waitFor(() => screen.getByTestId('trigger'));
+    expect(result).toEqual({ error: 'Invalid credentials' });
+  });
+});
 
-    await act(async () => {
-      screen.getByTestId('trigger').props.onPress();
-    });
+describe('signUp', () => {
+  it('passes the display name through and returns null error on success', async () => {
+    mockSignUp.mockResolvedValue({ error: null });
+    await renderProvider();
 
-    await waitFor(() => {
-      expect((global as any).__signInResult).toEqual({ error: 'Invalid credentials' });
-    });
+    let result: unknown;
+    await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
+
+    expect(mockSignUp).toHaveBeenCalledWith('u@test.com', 'pass', 'Maya');
+    expect(result).toEqual({ error: null });
+  });
+
+  it('returns the error message on failure', async () => {
+    mockSignUp.mockResolvedValue({ error: { message: 'Email taken' } });
+    await renderProvider();
+
+    let result: unknown;
+    await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
+
+    expect(result).toEqual({ error: 'Email taken' });
+  });
+});
+
+describe('signOut', () => {
+  it('calls the signOut service function', async () => {
+    mockSignOut.mockResolvedValue(undefined);
+    await renderProvider();
+
+    await act(async () => { await auth.signOut(); });
+
+    expect(mockSignOut).toHaveBeenCalled();
   });
 });
 
 // ---------------------------------------------------------------------------
-// signOut
+// Profile + onboarding mutations
 // ---------------------------------------------------------------------------
-describe('signOut', () => {
-  it('calls the signOut service function', async () => {
-    mockGetSession.mockResolvedValue(null);
-    mockSignOut.mockResolvedValue(undefined);
+describe('updateProfile', () => {
+  it('saves for the live session user and replaces the profile', async () => {
+    mockLiveGetSession.mockResolvedValue({ data: { session: SESSION } });
+    mockUpdateUserProfile.mockResolvedValue({ ...PROFILE, display_name: 'Maya C.' });
+    await renderProvider();
 
-    function SignOutConsumer() {
-      const { signOut } = useAuth();
-      return <Text testID="so" onPress={() => signOut()}>sign-out</Text>;
-    }
+    await act(async () => { await auth.updateProfile({ display_name: 'Maya C.' }); });
 
-    render(
-      <AuthProvider>
-        <SignOutConsumer />
-      </AuthProvider>
-    );
+    expect(mockUpdateUserProfile).toHaveBeenCalledWith('user-1', 'u@test.com', { display_name: 'Maya C.' });
+    expect(text('profileName')).toBe('Maya C.');
+  });
 
-    await waitFor(() => screen.getByTestId('so'));
+  it('adopts the live session into state if state was transiently empty', async () => {
+    mockLiveGetSession.mockResolvedValue({ data: { session: SESSION } });
+    mockUpdateUserProfile.mockResolvedValue(PROFILE);
+    await renderProvider();
+    expect(text('userId')).toBe('none');
 
-    await act(async () => {
-      screen.getByTestId('so').props.onPress();
+    await act(async () => { await auth.updateProfile({ bio: 'hi' }); });
+
+    expect(text('userId')).toBe('user-1');
+  });
+
+  it('rejects with "Not authenticated" when there is no session at all', async () => {
+    await renderProvider();
+
+    await expect(auth.updateProfile({ bio: 'hi' })).rejects.toThrow('Not authenticated');
+    expect(mockUpdateUserProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('refreshProfile', () => {
+  it('reloads the profile for the current session user', async () => {
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValueOnce(PROFILE);
+    await renderProvider();
+
+    mockFetchUserProfile.mockResolvedValueOnce({ ...PROFILE, display_name: 'Renamed' });
+    await act(async () => { await auth.refreshProfile(); });
+
+    expect(text('profileName')).toBe('Renamed');
+  });
+
+  it('does nothing when signed out', async () => {
+    await renderProvider();
+
+    await act(async () => { await auth.refreshProfile(); });
+
+    expect(mockFetchUserProfile).not.toHaveBeenCalled();
+  });
+});
+
+describe('onboarding', () => {
+  const campus = { id: 'nyu', name: 'NYU' } as any;
+
+  it('updateCampus saves and marks the profile campus-verified', async () => {
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
+    mockLiveGetSession.mockResolvedValue({ data: { session: SESSION } });
+    await renderProvider();
+
+    await act(async () => { await auth.updateCampus(campus, 'maya@nyu.edu'); });
+
+    expect(mockUpdateUserCampus).toHaveBeenCalledWith('user-1', campus, 'maya@nyu.edu');
+    expect(auth.profile).toMatchObject({
+      campus_verified: true, campus_id: 'nyu', campus_name: 'NYU', school_email: 'maya@nyu.edu',
     });
+  });
 
-    expect(mockSignOut).toHaveBeenCalled();
+  it('completeOnboarding saves and flags the profile', async () => {
+    mockGetSession.mockResolvedValue(SESSION);
+    mockFetchUserProfile.mockResolvedValue(PROFILE);
+    mockLiveGetSession.mockResolvedValue({ data: { session: SESSION } });
+    await renderProvider();
+
+    await act(async () => { await auth.completeOnboarding(); });
+
+    expect(mockMarkOnboarding).toHaveBeenCalledWith('user-1');
+    expect(auth.profile?.onboarding_complete).toBe(true);
+  });
+
+  it('completeOnboarding rejects when not authenticated', async () => {
+    await renderProvider();
+
+    await expect(auth.completeOnboarding()).rejects.toThrow('Not authenticated');
+    expect(mockMarkOnboarding).not.toHaveBeenCalled();
   });
 });
 

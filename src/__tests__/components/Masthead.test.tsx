@@ -8,7 +8,29 @@
  */
 import React from 'react';
 import { render, screen } from '@testing-library/react-native';
+
+// Masthead renders NotificationBell and MessagesIcon, which read navigation and
+// the Requests/Messages contexts. Mock those boundaries rather than mounting providers.
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
+
+let mockPendingCount = 0;
+jest.mock('../../context/RequestsContext', () => ({
+  useRequests: () => ({ pendingCount: mockPendingCount }),
+}));
+
+jest.mock('../../context/MessagesContext', () => ({
+  useMessages: () => ({ unreadCount: 0 }),
+}));
+
 import Masthead from '../../components/Masthead';
+
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPendingCount = 0;
+});
 
 describe('Masthead', () => {
   it('renders the "WEAR" text segment', () => {
@@ -47,5 +69,16 @@ describe('Masthead', () => {
   it('renders different subtitle values correctly', () => {
     render(<Masthead subtitle="Near Campus" />);
     expect(screen.getByText('Near Campus')).toBeTruthy();
+  });
+
+  it('shows the pending request count on the bell when there are requests', () => {
+    mockPendingCount = 3;
+    render(<Masthead />);
+    expect(screen.getByText('3')).toBeTruthy();
+  });
+
+  it('shows no count badge when nothing is pending', () => {
+    render(<Masthead />);
+    expect(screen.queryByText('0')).toBeNull();
   });
 });

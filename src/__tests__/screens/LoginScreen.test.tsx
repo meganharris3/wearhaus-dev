@@ -12,7 +12,7 @@
  * - renders ActivityIndicator while loading (signIn pending)
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react-native';
+import { render, screen, fireEvent, act } from '@testing-library/react-native';
 
 // ---------------------------------------------------------------------------
 // Navigation mock
@@ -63,9 +63,9 @@ describe('LoginScreen render', () => {
     expect(screen.getByText(' HAUS')).toBeTruthy();
   });
 
-  it('renders CAMPUS EXCHANGE tagline', () => {
+  it('renders the tagline', () => {
     renderScreen();
-    expect(screen.getByText('CAMPUS EXCHANGE')).toBeTruthy();
+    expect(screen.getByText('UNLOCK YOUR DREAM CLOSET')).toBeTruthy();
   });
 
   it('renders an Email text input', () => {
@@ -107,14 +107,9 @@ describe('LoginScreen validation', () => {
   it('shows error when submitting with empty fields', async () => {
     renderScreen();
 
-    fireEvent.press(screen.getByText('SIGN IN'));
+    await act(async () => { fireEvent.press(screen.getByText('SIGN IN')); });
 
-    await waitFor(() => {
-      expect(
-        screen.getByText('Please enter your email and password.')
-      ).toBeTruthy();
-    });
-
+    expect(screen.getByText('Please enter your email and password.')).toBeTruthy();
     expect(mockSignIn).not.toHaveBeenCalled();
   });
 
@@ -125,11 +120,10 @@ describe('LoginScreen validation', () => {
     const passwordInput = inputs.find((i: any) => i.props.placeholder === 'Password');
 
     fireEvent.changeText(passwordInput, 'secret123');
-    fireEvent.press(screen.getByText('SIGN IN'));
+    await act(async () => { fireEvent.press(screen.getByText('SIGN IN')); });
 
-    await waitFor(() => {
-      expect(screen.getByText('Please enter your email and password.')).toBeTruthy();
-    });
+    expect(screen.getByText('Please enter your email and password.')).toBeTruthy();
+    expect(mockSignIn).not.toHaveBeenCalled();
   });
 });
 
@@ -146,7 +140,9 @@ describe('LoginScreen submit', () => {
 
     fireEvent.changeText(emailInput, email);
     fireEvent.changeText(passwordInput, password);
-    fireEvent.press(screen.getByText('SIGN IN'));
+    // signIn resolves asynchronously and the screen sets state afterwards, so
+    // flush the press inside act().
+    await act(async () => { fireEvent.press(screen.getByText('SIGN IN')); });
   }
 
   it('calls signIn with trimmed email and password', async () => {
@@ -154,9 +150,7 @@ describe('LoginScreen submit', () => {
 
     await fillAndSubmit('  user@test.com  ', 'pass123');
 
-    await waitFor(() => {
-      expect(mockSignIn).toHaveBeenCalledWith('user@test.com', 'pass123');
-    });
+    expect(mockSignIn).toHaveBeenCalledWith('user@test.com', 'pass123');
   });
 
   it('displays error message returned by signIn', async () => {
@@ -164,9 +158,7 @@ describe('LoginScreen submit', () => {
 
     await fillAndSubmit('bad@test.com', 'wrong');
 
-    await waitFor(() => {
-      expect(screen.getByText('Invalid credentials')).toBeTruthy();
-    });
+    expect(screen.getByText('Invalid credentials')).toBeTruthy();
   });
 
   it('does not display an error message on successful sign-in', async () => {
@@ -174,9 +166,35 @@ describe('LoginScreen submit', () => {
 
     await fillAndSubmit('user@test.com', 'pass123');
 
-    await waitFor(() => {
-      expect(screen.queryByText('Invalid credentials')).toBeNull();
-    });
+    expect(mockSignIn).toHaveBeenCalled();
+    expect(screen.queryByText('Invalid credentials')).toBeNull();
+    expect(screen.queryByText('Please enter your email and password.')).toBeNull();
+  });
+
+  it('clears a previous error when submitting again', async () => {
+    mockSignIn.mockResolvedValueOnce({ error: 'Invalid credentials' });
+    await fillAndSubmit('bad@test.com', 'wrong');
+    expect(screen.getByText('Invalid credentials')).toBeTruthy();
+
+    mockSignIn.mockResolvedValueOnce({ error: null });
+    await act(async () => { fireEvent.press(screen.getByText('SIGN IN')); });
+
+    expect(screen.queryByText('Invalid credentials')).toBeNull();
+  });
+
+  it('shows a spinner instead of the SIGN IN label while signing in', async () => {
+    let resolveSignIn: (v: { error: null }) => void = () => {};
+    mockSignIn.mockReturnValue(new Promise((resolve) => { resolveSignIn = resolve; }));
+
+    await fillAndSubmit('user@test.com', 'pass123');
+
+    const { ActivityIndicator } = require('react-native');
+    expect(screen.queryByText('SIGN IN')).toBeNull();
+    expect(screen.UNSAFE_queryByType(ActivityIndicator)).toBeTruthy();
+
+    await act(async () => { resolveSignIn({ error: null }); });
+
+    expect(screen.getByText('SIGN IN')).toBeTruthy();
   });
 });
 
