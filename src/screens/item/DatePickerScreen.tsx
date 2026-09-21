@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   View, Text, ScrollView, Pressable,
-  Image, StyleSheet,
+  Image, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -15,6 +15,7 @@ import {
 } from '../../utils/dateUtils';
 import { useRequests } from '../../context/RequestsContext';
 import { useMessages } from '../../context/MessagesContext';
+import { useAuth } from '../../context/AuthContext';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DatePicker'>;
 
@@ -29,6 +30,8 @@ export default function DatePickerScreen({ route, navigation }: Props) {
 
   const { addRequest } = useRequests();
   const { createThread } = useMessages();
+  const { user, profile } = useAuth();
+  const [isRequesting, setIsRequesting] = useState(false);
   const [month, setMonth]                 = useState(new Date());
   const [selectedStart, setSelectedStart] = useState<Date | null>(null);
   const [selectedEnd, setSelectedEnd]     = useState<Date | null>(null);
@@ -53,21 +56,16 @@ export default function DatePickerScreen({ route, navigation }: Props) {
   const deposit    = +(dailyRate * 1.5).toFixed(2);
   const total      = +(subtotal + serviceFee + deposit).toFixed(2);
 
-  function handleRequest() {
-    if (!hasRange) return;
+  async function handleRequest() {
+    if (!hasRange || isRequesting) return;
+    if (!user?.id) {
+      Alert.alert('Sign in required', 'You need to be signed in to request an item.');
+      return;
+    }
 
-    addRequest({
-      borrowerName: 'You',
-      itemName: item.name,
-      days,
-      dateRange: formatRange(selectedStart!, selectedEnd!),
-      direction: 'outgoing',
-      ownerName: item.owner?.display_name,
-      total,
-    });
-
+    const lenderId = item.owner?.id ?? item.owner_id;
     const otherUser: ThreadParticipant = {
-      id: item.owner?.id ?? 'unknown',
+      id: lenderId,
       name: item.owner?.display_name ?? 'Lender',
       handle: (item.owner?.display_name ?? 'lender').toLowerCase().replace(/\s+/g, ''),
       initials: (item.owner?.display_name ?? 'L')
@@ -79,32 +77,51 @@ export default function DatePickerScreen({ route, navigation }: Props) {
       avatarColor: '#F0EDE0',
     };
 
-    const thread = createThread({
-      item,
-      otherUser,
-      payload: {
-        lenderId: item.owner?.id ?? 'unknown',
-        lenderFirstName: (item.owner?.display_name ?? 'Lender').split(' ')[0],
-        borrowerId: 'me',
-        borrowerFirstName: 'You',
-        item: {
-          name: item.name,
-          size: item.size_label ?? '',
-          condition: item.condition ?? 'Good condition',
-          thumbColor: '#D8D4C8',
-          photo: item.photo_url ?? null,
+    setIsRequesting(true);
+    let threadId: string;
+    try {
+      const thread = await createThread({
+        item,
+        otherUser,
+        payload: {
+          lenderId,
+          lenderFirstName: (item.owner?.display_name ?? 'Lender').split(' ')[0],
+          borrowerId: user.id,
+          borrowerFirstName: (profile?.display_name ?? 'Someone').split(' ')[0],
+          item: {
+            name: item.name,
+            size: item.size_label ?? '',
+            condition: item.condition ?? 'Good condition',
+            thumbColor: '#D8D4C8',
+            photo: item.photo_url ?? null,
+          },
+          startDate: formatDateShort(selectedStart!),
+          endDate: formatDateShort(selectedEnd!),
+          days,
+          pricePerDay: dailyRate,
+          pickupMethod: 'Campus Pickup',
+          total,
+          status: 'pending',
         },
-        startDate: formatDateShort(selectedStart!),
-        endDate: formatDateShort(selectedEnd!),
-        days,
-        pricePerDay: dailyRate,
-        pickupMethod: 'Campus Pickup',
-        total,
-        status: 'pending',
-      },
+      });
+      threadId = thread.id;
+    } catch (e) {
+      Alert.alert('Could not send request', e instanceof Error ? e.message : 'Please try again.');
+      setIsRequesting(false);
+      return;
+    }
+
+    addRequest({
+      borrowerName: 'You',
+      itemName: item.name,
+      days,
+      dateRange: formatRange(selectedStart!, selectedEnd!),
+      direction: 'outgoing',
+      ownerName: item.owner?.display_name,
+      total,
     });
 
-    navigation.navigate('ChatThread', { threadId: thread.id });
+    navigation.navigate('ChatThread', { threadId });
   }
 
   return (
@@ -117,7 +134,7 @@ export default function DatePickerScreen({ route, navigation }: Props) {
         <Text style={styles.topTitle}>PICK DATES</Text>
         <Pressable
           style={[styles.nextBtn, !hasRange && styles.nextBtnDisabled]}
-          disabled={!hasRange}
+          disabled={!hasRange || isRequesting}
           onPress={handleRequest}
         >
           <Text style={styles.nextBtnText}>REQUEST</Text>

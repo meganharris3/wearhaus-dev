@@ -1,19 +1,19 @@
 import React, { useState, useEffect } from 'react';
 import {
   View, Text, FlatList, TextInput, Pressable, Image,
-  TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform,
+  TouchableOpacity, StyleSheet, KeyboardAvoidingView, Platform, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
+import { useAuth } from '../../context/AuthContext';
+import { formatMessageTime } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread, Item } from '../../types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ChatThread'>;
-
-const CURRENT_USER = 'me';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -187,9 +187,10 @@ function BorrowRequestCard({
   onCounter: () => void;
   onCancel: () => void;
 }) {
+  const { user } = useAuth();
   const payload = msg.payload as BorrowRequestPayload;
-  const isLender   = CURRENT_USER === payload.lenderId;
-  const isBorrower = CURRENT_USER === payload.borrowerId;
+  const isLender   = user?.id === payload.lenderId;
+  const isBorrower = user?.id === payload.borrowerId;
 
   return (
     <View style={cardStyles.shell}>
@@ -209,7 +210,7 @@ function BorrowRequestCard({
       {payload.status === 'accepted' && isLender   && <LenderConfirmed payload={payload} />}
       {payload.status === 'declined' && <DeclinedNote isLender={isLender} />}
 
-      <Text style={cardStyles.timestamp}>{msg.timestamp}</Text>
+      <Text style={cardStyles.timestamp}>{formatMessageTime(msg.timestamp)}</Text>
     </View>
   );
 }
@@ -217,13 +218,14 @@ function BorrowRequestCard({
 // ─── Other message renderers ───────────────────────────────────────────────────
 
 function TextBubble({ msg }: { msg: ChatMessage }) {
-  const isMine = msg.senderId === CURRENT_USER;
+  const { user } = useAuth();
+  const isMine = msg.senderId === user?.id;
   return (
     <View style={{ alignItems: isMine ? 'flex-end' : 'flex-start', marginBottom: 8 }}>
       <View style={isMine ? styles.bubbleMine : styles.bubbleTheirs}>
         <Text style={isMine ? styles.bubbleTextMine : styles.bubbleTextTheirs}>{msg.text}</Text>
       </View>
-      <Text style={styles.timestamp}>{msg.timestamp}</Text>
+      <Text style={styles.timestamp}>{formatMessageTime(msg.timestamp)}</Text>
     </View>
   );
 }
@@ -247,8 +249,9 @@ function CounterOfferCard({
   thread: Thread;
   navigation: Props['navigation'];
 }) {
+  const { user } = useAuth();
   const payload = msg.payload as CounterOfferPayload;
-  const isMine = msg.senderId === CURRENT_USER;
+  const isMine = msg.senderId === user?.id;
 
   return (
     <View style={[styles.card, { alignSelf: isMine ? 'flex-end' : 'flex-start' }]}>
@@ -282,7 +285,7 @@ function CounterOfferCard({
           </Pressable>
         </View>
       )}
-      <Text style={[styles.timestamp, { marginTop: 6 }]}>{msg.timestamp}</Text>
+      <Text style={[styles.timestamp, { marginTop: 6 }]}>{formatMessageTime(msg.timestamp)}</Text>
     </View>
   );
 }
@@ -311,9 +314,10 @@ function ItemMentionCard({ item }: { item: Item }) {
 
 export default function ChatThreadScreen({ route, navigation }: Props) {
   const { threadId: initialThreadId, pendingItem, pendingOtherUser } = route.params;
-  const { getThread, markRead, sendMessage, updateRequestStatus, createDirectThread } = useMessages();
+  const { getThread, openThread, markRead, sendMessage, updateRequestStatus, createDirectThread } = useMessages();
   const [inputText, setInputText] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId);
+  const [isSending, setIsSending] = useState(false);
 
   const thread = activeThreadId ? getThread(activeThreadId) : undefined;
   const isNewThread = !thread;
@@ -322,8 +326,15 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
   const displayOtherUser = thread?.otherUser ?? pendingOtherUser;
 
   useEffect(() => {
-    if (activeThreadId) markRead(activeThreadId);
+    // Skip ids that aren't in the cache (e.g. stale/mock ids) — the screen shows 'Thread not found'.
+    if (!activeThreadId || !getThread(activeThreadId)) return;
+    markRead(activeThreadId);
+    openThread(activeThreadId).catch(() => Alert.alert('Could not load messages', 'Please try again.'));
   }, [activeThreadId]);
+
+  function showError(title: string, e: unknown) {
+    Alert.alert(title, e instanceof Error ? e.message : 'Please try again.');
+  }
 
   if (!displayOtherUser) {
     return (
@@ -335,43 +346,52 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     );
   }
 
-  function handleSend() {
+  async function handleSend() {
     const text = inputText.trim();
-    if (!text) return;
-    let targetId = activeThreadId;
-    if (!targetId && pendingOtherUser) {
-      const newThread = createDirectThread(pendingOtherUser, pendingItem);
-      targetId = newThread.id;
-      setActiveThreadId(newThread.id);
-      if (pendingItem) {
-        sendMessage(targetId, { type: 'item_mention', senderId: CURRENT_USER, text: pendingItem.name, timestamp: 'Just now' });
+    if (!text || isSending) return;
+    setIsSending(true);
+    try {
+      let targetId = activeThreadId;
+      if (!targetId && pendingOtherUser) {
+        const newThread = await createDirectThread(pendingOtherUser, pendingItem);
+        targetId = newThread.id;
+        setActiveThreadId(newThread.id);
+        if (pendingItem) {
+          await sendMessage(targetId, { type: 'item_mention', text: pendingItem.name });
+        }
       }
+      if (!targetId) return;
+      await sendMessage(targetId, { type: 'text', text });
+      setInputText('');
+    } catch (e) {
+      showError('Could not send message', e);
+    } finally {
+      setIsSending(false);
     }
-    if (!targetId) return;
-    sendMessage(targetId, { type: 'text', senderId: CURRENT_USER, text, timestamp: 'Just now' });
-    setInputText('');
+  }
+
+  async function resolveRequest(
+    msg: ChatMessage,
+    status: 'accepted' | 'declined',
+    notice: string,
+  ) {
+    if (!activeThreadId) return;
+    try {
+      await updateRequestStatus(activeThreadId, msg.id, status);
+      await sendMessage(activeThreadId, { type: 'system', text: notice });
+    } catch (e) {
+      showError('Could not update request', e);
+    }
   }
 
   function handleAccept(msg: ChatMessage) {
-    if (!activeThreadId) return;
     const payload = msg.payload as BorrowRequestPayload;
-    updateRequestStatus(activeThreadId, msg.id, 'accepted');
-    sendMessage(activeThreadId, {
-      type: 'system', senderId: 'system',
-      text: `${payload.lenderFirstName} accepted the request`,
-      timestamp: 'Just now',
-    });
+    resolveRequest(msg, 'accepted', `${payload.lenderFirstName} accepted the request`);
   }
 
   function handleDecline(msg: ChatMessage) {
-    if (!activeThreadId) return;
     const payload = msg.payload as BorrowRequestPayload;
-    updateRequestStatus(activeThreadId, msg.id, 'declined');
-    sendMessage(activeThreadId, {
-      type: 'system', senderId: 'system',
-      text: `${payload.lenderFirstName} declined the request`,
-      timestamp: 'Just now',
-    });
+    resolveRequest(msg, 'declined', `${payload.lenderFirstName} declined the request`);
   }
 
   function handleCounter(msg: ChatMessage) {
@@ -384,13 +404,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
   }
 
   function handleCancel(msg: ChatMessage) {
-    if (!activeThreadId) return;
-    updateRequestStatus(activeThreadId, msg.id, 'declined');
-    sendMessage(activeThreadId, {
-      type: 'system', senderId: 'system',
-      text: 'Request cancelled',
-      timestamp: 'Just now',
-    });
+    resolveRequest(msg, 'declined', 'Request cancelled');
   }
 
   function renderMessage(msg: ChatMessage) {
@@ -502,7 +516,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
             multiline
             autoFocus={isNewThread}
           />
-          <Pressable style={styles.sendBtn} onPress={handleSend}>
+          <Pressable style={[styles.sendBtn, isSending && { opacity: 0.5 }]} onPress={handleSend} disabled={isSending}>
             <Ionicons name="arrow-up" size={16} color={theme.colors.ivory} />
           </Pressable>
         </View>

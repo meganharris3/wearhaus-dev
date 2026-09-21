@@ -1,12 +1,13 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { View, Text, FlatList, Pressable, StyleSheet, Modal, TextInput, Animated } from 'react-native';
 import { useFadeOnFocus } from '../../hooks/useFadeOnFocus';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
 import { useFriends } from '../../context/FriendsContext';
+import { formatMessageTime } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Thread, ThreadStatus, Friend } from '../../types';
 
@@ -65,7 +66,7 @@ function ThreadRow({ thread }: { thread: Thread }) {
           <Text style={styles.name}>{thread.otherUser.name}</Text>
           <View style={styles.bodyTopRight}>
             <StatusBadge status={thread.status} />
-            <Text style={styles.time}>{thread.lastMessageTime}</Text>
+            <Text style={styles.time}>{formatMessageTime(thread.lastMessageTime)}</Text>
           </View>
         </View>
         <Text style={styles.preview} numberOfLines={1}>{thread.lastMessage}</Text>
@@ -158,7 +159,9 @@ function ComposeModal({
 export default function MessagesScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
   const fadeOpacity = useFadeOnFocus();
-  const { threads, findThreadByUser } = useMessages();
+  const { threads, findThreadByUser, refreshThreads } = useMessages();
+
+  useFocusEffect(useCallback(() => { refreshThreads(); }, [refreshThreads]));
   const [composeVisible, setComposeVisible] = useState(false);
 
   function handleSelectFriend(friend: Friend) {

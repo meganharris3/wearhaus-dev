@@ -302,18 +302,20 @@ export default function BorrowsDashboardScreen() {
     updateBorrowStatus(borrowId, 'completed');
   }
 
-  function sendReturnNudge(lendId: string) {
+  async function sendReturnNudge(lendId: string) {
     const lend = lends.find(l => l.id === lendId);
     if (!lend) return;
     const participant = participantFromLend(lend);
-    const thread = findThreadByUser(lend.borrowerId) ?? createDirectThread(participant);
-    sendMessage(thread.id, {
-      type: 'text',
-      senderId: 'me',
-      text: `Hey! Just a friendly reminder — your rental of ${lend.itemName} is due ${formatDate(lend.endDate)}.`,
-      timestamp: 'Just now',
-    });
-    nav.navigate('ChatThread', { threadId: thread.id });
+    try {
+      const thread = findThreadByUser(lend.borrowerId) ?? await createDirectThread(participant);
+      await sendMessage(thread.id, {
+        type: 'text',
+        text: `Hey! Just a friendly reminder — your rental of ${lend.itemName} is due ${formatDate(lend.endDate)}.`,
+      });
+      nav.navigate('ChatThread', { threadId: thread.id });
+    } catch (e) {
+      Alert.alert('Could not send reminder', e instanceof Error ? e.message : 'Please try again.');
+    }
   }
 
   function handleRate(_borrow: BorrowRecord) {

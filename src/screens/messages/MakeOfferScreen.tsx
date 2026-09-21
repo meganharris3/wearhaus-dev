@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, ScrollView, Pressable, StyleSheet } from 'react-native';
+import { View, Text, TextInput, ScrollView, Pressable, StyleSheet, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
@@ -21,9 +21,11 @@ export default function MakeOfferScreen({ route, navigation }: Props) {
   const [selectedEnd, setSelectedEnd]     = useState<Date | null>(null);
   const [month, setMonth]                 = useState(new Date());
 
-  const canSend = priceInput.trim().length > 0;
+  const [isSending, setIsSending] = useState(false);
 
-  function handleSend() {
+  const canSend = priceInput.trim().length > 0 && !isSending;
+
+  async function handleSend() {
     if (!canSend) return;
     const payload: CounterOfferPayload = {
       pricePerDay: Math.round(parseFloat(priceInput) * 100),
@@ -32,13 +34,14 @@ export default function MakeOfferScreen({ route, navigation }: Props) {
         : { start: '—', end: '—' },
       note: note.trim() || undefined,
     };
-    sendMessage(threadId, {
-      type: 'counter_offer',
-      senderId: 'me',
-      payload,
-      timestamp: 'Just now',
-    });
-    navigation.goBack();
+    setIsSending(true);
+    try {
+      await sendMessage(threadId, { type: 'counter_offer', payload });
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Could not send offer', e instanceof Error ? e.message : 'Please try again.');
+      setIsSending(false);
+    }
   }
 
   return (

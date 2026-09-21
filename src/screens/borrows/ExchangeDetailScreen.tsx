@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -374,7 +374,7 @@ export default function ExchangeDetailScreen() {
     nav.goBack();
   }
 
-  function handleNudgeReturn() {
+  async function handleNudgeReturn() {
     if (!lend) return;
     const participant: ThreadParticipant = {
       id:          lend.borrowerId,
@@ -383,14 +383,16 @@ export default function ExchangeDetailScreen() {
       initials:    lend.borrowerInitials,
       avatarColor: lend.borrowerAvatarColor,
     };
-    const thread = findThreadByUser(lend.borrowerId) ?? createDirectThread(participant);
-    sendMessage(thread.id, {
-      type: 'text',
-      senderId: 'me',
-      text: `Hey! Just a friendly reminder — your rental of ${lend.itemName} is due ${formatDate(lend.endDate)}.`,
-      timestamp: 'Just now',
-    });
-    nav.navigate('ChatThread', { threadId: thread.id });
+    try {
+      const thread = findThreadByUser(lend.borrowerId) ?? await createDirectThread(participant);
+      await sendMessage(thread.id, {
+        type: 'text',
+        text: `Hey! Just a friendly reminder — your rental of ${lend.itemName} is due ${formatDate(lend.endDate)}.`,
+      });
+      nav.navigate('ChatThread', { threadId: thread.id });
+    } catch (e) {
+      Alert.alert('Could not send reminder', e instanceof Error ? e.message : 'Please try again.');
+    }
   }
 
   const threadId = exchange.threadId;
