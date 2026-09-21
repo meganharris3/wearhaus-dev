@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { Item } from '../types';
+import { pageRange, type PageOpts } from './pagination';
 
 const ITEM_SELECT = `
   id, owner_id, name, photo_url, photo_urls, category, size_label,
@@ -10,13 +11,15 @@ const ITEM_SELECT = `
   owner:users(id, display_name, avatar_url, rating, university)
 `;
 
-export async function fetchFeedItems(category?: string): Promise<Item[]> {
+export async function fetchFeedItems(category?: string, opts: PageOpts = {}): Promise<Item[]> {
+  const [from, to] = pageRange(opts, 20);
   let query = supabase
     .from('items')
     .select(ITEM_SELECT)
     .eq('status', 'available')
     .order('created_at', { ascending: false })
-    .limit(20);
+    .order('id')
+    .range(from, to);
   if (category && category !== 'All') {
     query = query.ilike('category', `%${category}%`);
   }
@@ -30,12 +33,14 @@ export async function searchItems(params: {
   size?: string;
   category?: string;
   maxPrice?: number;
-}): Promise<Item[]> {
+}, opts: PageOpts = {}): Promise<Item[]> {
+  const [from, to] = pageRange(opts, 30);
   let q = supabase
     .from('items')
     .select(ITEM_SELECT)
     .order('created_at', { ascending: false })
-    .limit(30);
+    .order('id')
+    .range(from, to);
   if (params.query)    q = q.ilike('name', `%${params.query}%`);
   if (params.size)     q = q.eq('size_label', params.size);
   if (params.category) q = q.ilike('category', `%${params.category}%`);
@@ -109,13 +114,15 @@ export async function deleteItem(id: string): Promise<void> {
   if (!data?.length) throw new Error('Item could not be deleted — check Supabase RLS: items table needs a DELETE policy with auth.uid() = owner_id');
 }
 
-export async function fetchMyItems(userId: string, tab: string): Promise<Item[]> {
+export async function fetchMyItems(userId: string, tab: string, opts: PageOpts = {}): Promise<Item[]> {
+  const [from, to] = pageRange(opts, 50);
   let q = supabase
     .from('items')
     .select(ITEM_SELECT)
     .eq('owner_id', userId)
     .order('created_at', { ascending: false })
-    .limit(50);
+    .order('id')
+    .range(from, to);
   if (tab === 'Listed')   q = q.eq('status', 'available');
   if (tab === 'Lent Out') q = q.eq('status', 'lent');
   if (tab === 'Wash')     q = q.eq('status', 'wash');

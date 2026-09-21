@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { pageRange, type PageOpts } from './pagination';
 import type { Haus } from '../types';
 
 export async function fetchMyHauses(userId: string): Promise<Haus[]> {
@@ -10,12 +11,14 @@ export async function fetchMyHauses(userId: string): Promise<Haus[]> {
   return (data?.map((r: any) => r.haus).filter(Boolean) ?? []) as Haus[];
 }
 
-export async function fetchAllHauses(): Promise<Haus[]> {
+export async function fetchAllHauses(opts: PageOpts = {}): Promise<Haus[]> {
+  const [from, to] = pageRange(opts, 50);
   const { data, error } = await supabase
     .from('hauses')
     .select('id, name, description, cover_url, member_count, piece_count')
     .order('member_count', { ascending: false })
-    .limit(50);
+    .order('id')
+    .range(from, to);
   if (error) throw new Error(error.message);
   return (data ?? []) as Haus[];
 }

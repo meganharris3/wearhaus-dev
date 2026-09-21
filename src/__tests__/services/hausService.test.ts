@@ -4,7 +4,7 @@
 
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const methods = ['select', 'eq', 'order', 'limit', 'insert', 'delete', 'update'];
+  const methods = ['select', 'eq', 'order', 'limit', 'range', 'insert', 'delete', 'update'];
 
   methods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
@@ -111,6 +111,26 @@ describe('fetchMyHauses', () => {
 // fetchAllHauses
 // ---------------------------------------------------------------------------
 describe('fetchAllHauses', () => {
+  it('defaults to the first 50 rows, with id as a stable tiebreaker', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchAllHauses();
+
+    expect(chain.range).toHaveBeenCalledWith(0, 49);
+    expect(chain.order).toHaveBeenCalledWith('id');
+    expect(chain.limit).not.toHaveBeenCalled();
+  });
+
+  it('pages with limit and offset', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchAllHauses({ limit: 20, offset: 40 });
+
+    expect(chain.range).toHaveBeenCalledWith(40, 59);
+  });
+
   it('returns all hauses ordered by member_count', async () => {
     const data = [makeHaus({ id: 'h1', member_count: 10 }), makeHaus({ id: 'h2', member_count: 5 })];
     const chain = makeChain({ data, error: null });

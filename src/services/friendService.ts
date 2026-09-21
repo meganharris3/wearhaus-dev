@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { pageRange, type PageOpts } from './pagination';
 import type { Friend, FriendRequest, SuggestedFriend } from '../types';
 
 export async function fetchFriends(userId: string): Promise<Friend[]> {
@@ -75,13 +76,16 @@ export async function declineFriendRequest(requestId: string, userId: string): P
   if (error) throw new Error(error.message);
 }
 
-export async function fetchSuggestedFriends(userId: string): Promise<SuggestedFriend[]> {
+export async function fetchSuggestedFriends(userId: string, opts: PageOpts = {}): Promise<SuggestedFriend[]> {
   // Users who are NOT already friends or pending — simple fallback: recent users
+  const [from, to] = pageRange(opts, 10);
   const { data, error } = await supabase
     .from('users')
     .select('id, display_name, username, avatar_url')
     .neq('id', userId)
-    .limit(10);
+    .order('created_at', { ascending: false })
+    .order('id')
+    .range(from, to);
 
   if (error) throw new Error(error.message);
 

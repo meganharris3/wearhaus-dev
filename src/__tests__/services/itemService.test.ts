@@ -13,7 +13,7 @@
 /** Creates a chainable builder whose final resolution is `result`. */
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const chainMethods = ['select', 'eq', 'ilike', 'order', 'limit', 'lte', 'single'];
+  const chainMethods = ['select', 'eq', 'ilike', 'order', 'limit', 'range', 'lte', 'single'];
 
   chainMethods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
@@ -68,6 +68,27 @@ const makeItem = (overrides: Partial<Item> = {}): Item => ({
 // fetchFeedItems
 // ---------------------------------------------------------------------------
 describe('fetchFeedItems', () => {
+  it('defaults to the first 20 rows with id as a stable tiebreaker', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchFeedItems();
+
+    expect(chain.range).toHaveBeenCalledWith(0, 19);
+    expect(chain.order).toHaveBeenCalledWith('id');
+    expect(chain.limit).not.toHaveBeenCalled();
+  });
+
+  it('pages with limit and offset, alongside a category filter', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchFeedItems('Dresses', { limit: 10, offset: 20 });
+
+    expect(chain.range).toHaveBeenCalledWith(20, 29);
+    expect(chain.ilike).toHaveBeenCalledWith('category', '%Dresses%');
+  });
+
   it('returns items from Supabase on success', async () => {
     const items = [makeItem({ id: '1' }), makeItem({ id: '2', status: 'available' })];
     mockFrom.mockReturnValue(makeChain({ data: items, error: null }));
@@ -126,6 +147,26 @@ describe('fetchFeedItems', () => {
 // searchItems
 // ---------------------------------------------------------------------------
 describe('searchItems', () => {
+  it('defaults to the first 30 rows with id as a stable tiebreaker', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await searchItems({ query: 'jacket' });
+
+    expect(chain.range).toHaveBeenCalledWith(0, 29);
+    expect(chain.order).toHaveBeenCalledWith('id');
+    expect(chain.limit).not.toHaveBeenCalled();
+  });
+
+  it('pages with limit and offset', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await searchItems({ query: 'jacket' }, { limit: 5, offset: 10 });
+
+    expect(chain.range).toHaveBeenCalledWith(10, 14);
+  });
+
   it('returns matching items for a name query', async () => {
     const items = [makeItem({ name: 'Silk Dress' })];
     const chain = makeChain({ data: items, error: null });
@@ -221,6 +262,27 @@ describe('fetchItemById', () => {
 // fetchMyItems
 // ---------------------------------------------------------------------------
 describe('fetchMyItems', () => {
+  it('defaults to the first 50 rows with id as a stable tiebreaker', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchMyItems('u1', 'All');
+
+    expect(chain.range).toHaveBeenCalledWith(0, 49);
+    expect(chain.order).toHaveBeenCalledWith('id');
+    expect(chain.limit).not.toHaveBeenCalled();
+  });
+
+  it('pages with limit and offset', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchMyItems('u1', 'Listed', { limit: 25, offset: 25 });
+
+    expect(chain.range).toHaveBeenCalledWith(25, 49);
+    expect(chain.eq).toHaveBeenCalledWith('status', 'available');
+  });
+
   it('fetches all items for a user with no tab filter', async () => {
     const items = [makeItem({ owner_id: 'u1' })];
     const chain = makeChain({ data: items, error: null });

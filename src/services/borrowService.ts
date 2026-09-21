@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { BorrowRecord, LendRecord } from '../context/BorrowsContext';
+import { pageRange, type PageOpts } from './pagination';
 
 // ── color derivation ──────────────────────────────────────────────────────────
 // Derives a stable muted palette color from any UUID, used as avatar/thumb
@@ -101,15 +102,21 @@ function rowToLendRecord(row: RentalRow): LendRecord {
 
 // ── public API ────────────────────────────────────────────────────────────────
 
+// Rentals are consumed as a whole history (BorrowsContext), so the default is
+// PostgREST's own 1000-row cap made explicit rather than a feed-sized page.
 export async function fetchMyRentals(
   userId: string,
+  opts: PageOpts = {},
 ): Promise<{ borrows: BorrowRecord[]; lends: LendRecord[] }> {
+  const [from, to] = pageRange(opts, 1000);
   const { data, error } = await supabase
     .from('rentals')
     .select(RENTAL_SELECT)
     .or(`borrower_id.eq.${userId},lender_id.eq.${userId}`)
     .neq('status', 'cancelled')
-    .order('created_at', { ascending: false });
+    .order('created_at', { ascending: false })
+    .order('id')
+    .range(from, to);
 
   if (error) throw new Error(error.message);
 
