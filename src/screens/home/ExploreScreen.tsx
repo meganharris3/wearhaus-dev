@@ -230,7 +230,7 @@ export default function ExploreScreen() {
     );
 
     if (audience === 'friends') {
-      items = items.filter((i) => i.owner?.id && friendIds.has(i.owner.id));
+      items = items.filter((i) => friendIds.has(i.owner_id));
     } else if (audience === 'hauses') {
       items = items.filter((i) =>
         Object.entries(i.haus_visibility ?? {}).some(
