@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import {
-  View, Text, Image, Pressable, FlatList, StyleSheet, Dimensions,
+  View, Text, Image, Pressable, FlatList, StyleSheet, Dimensions, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -32,6 +32,7 @@ export default function AddItemsToBoardScreen() {
   const availableItems = allItems.filter((item) => !board?.itemIds.includes(item.id));
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [isAdding, setIsAdding] = useState(false);
 
   function toggle(id: string) {
     setSelected((prev) => {
@@ -42,10 +43,16 @@ export default function AddItemsToBoardScreen() {
     });
   }
 
-  function handleAdd() {
+  async function handleAdd() {
     if (selected.size === 0) { navigation.goBack(); return; }
-    addItemsToBoard(boardId, Array.from(selected));
-    navigation.goBack();
+    setIsAdding(true);
+    try {
+      await addItemsToBoard(boardId, Array.from(selected));
+      navigation.goBack();
+    } catch (e) {
+      Alert.alert('Could not add items', e instanceof Error ? e.message : 'Please try again.');
+      setIsAdding(false);
+    }
   }
 
   function renderItem({ item, index }: { item: Item; index: number }) {
@@ -119,11 +126,12 @@ export default function AddItemsToBoardScreen() {
       {/* Add button */}
       <View style={styles.footer}>
         <Pressable
-          style={[styles.addBtn, selected.size === 0 && styles.addBtnDisabled]}
+          style={[styles.addBtn, (selected.size === 0 || isAdding) && styles.addBtnDisabled]}
           onPress={handleAdd}
+          disabled={isAdding}
         >
           <Text style={styles.addBtnText}>
-            {selected.size > 0 ? `ADD ${selected.size} ITEM${selected.size > 1 ? 'S' : ''}` : 'DONE'}
+            {isAdding ? 'ADDING…' : selected.size > 0 ? `ADD ${selected.size} ITEM${selected.size > 1 ? 'S' : ''}` : 'DONE'}
           </Text>
         </Pressable>
       </View>

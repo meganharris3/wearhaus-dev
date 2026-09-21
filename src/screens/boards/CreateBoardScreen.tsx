@@ -11,7 +11,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import VisibilityToggle, { BOARD_OPTIONS } from '../../components/VisibilityToggle';
 import { useBoards } from '../../context/BoardsContext';
-import { useAuth } from '../../context/AuthContext';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { VisibilityMode } from '../../types';
 
@@ -22,7 +21,7 @@ export default function CreateBoardScreen() {
   const navigation = useNavigation<Nav>();
   const route = useRoute<Route>();
   const { boards, addBoard, updateBoard, deleteBoard } = useBoards();
-  const { user } = useAuth();
+  const [isSaving, setIsSaving] = useState(false);
 
   const editId = route.params?.boardId;
   const existingBoard = editId ? boards.find((b) => b.id === editId) : undefined;
@@ -31,28 +30,25 @@ export default function CreateBoardScreen() {
   const [boardName,  setBoardName]  = useState(existingBoard?.name       ?? '');
   const [visibility, setVisibility] = useState<VisibilityMode>(existingBoard?.visibility ?? 'public');
 
-  function handleSave() {
+  async function handleSave() {
     const name = boardName.trim();
     if (!name) {
       Alert.alert('Name required', 'Give your board a name.');
       return;
     }
 
-    if (isEdit && existingBoard) {
-      updateBoard({ ...existingBoard, name, visibility, coverStyle: 'mosaic' });
-      navigation.goBack();
-    } else {
-      const newBoard = {
-        id: `board_${Date.now()}`,
-        name,
-        visibility,
-        coverStyle: 'mosaic' as const,
-        itemIds: [],
-        createdAt: new Date().toISOString(),
-        ownerId: user?.id ?? 'me',
-      };
-      addBoard(newBoard);
-      navigation.replace('BoardDetail', { boardId: newBoard.id });
+    setIsSaving(true);
+    try {
+      if (isEdit && existingBoard) {
+        await updateBoard({ ...existingBoard, name, visibility, coverStyle: 'mosaic' });
+        navigation.goBack();
+      } else {
+        const created = await addBoard({ name, visibility, coverStyle: 'mosaic' });
+        navigation.replace('BoardDetail', { boardId: created.id });
+      }
+    } catch (e) {
+      Alert.alert('Could not save board', e instanceof Error ? e.message : 'Please try again.');
+      setIsSaving(false);
     }
   }
 
@@ -65,7 +61,14 @@ export default function CreateBoardScreen() {
         { text: 'Cancel', style: 'cancel' },
         {
           text: 'Delete', style: 'destructive',
-          onPress: () => { deleteBoard(editId); navigation.goBack(); },
+          onPress: async () => {
+            try {
+              await deleteBoard(editId);
+              navigation.goBack();
+            } catch (e) {
+              Alert.alert('Could not delete board', e instanceof Error ? e.message : 'Please try again.');
+            }
+          },
         },
       ],
     );
@@ -112,9 +115,13 @@ export default function CreateBoardScreen() {
             <VisibilityToggle value={visibility} onChange={setVisibility} options={BOARD_OPTIONS} />
 
             {/* Create / Save */}
-            <Pressable style={styles.createBtn} onPress={handleSave}>
+            <Pressable
+              style={[styles.createBtn, isSaving && styles.createBtnDisabled]}
+              onPress={handleSave}
+              disabled={isSaving}
+            >
               <Text style={styles.createBtnText}>
-                {isEdit ? 'SAVE CHANGES' : 'CREATE BOARD'}
+                {isSaving ? 'SAVING…' : isEdit ? 'SAVE CHANGES' : 'CREATE BOARD'}
               </Text>
             </Pressable>
 
@@ -190,6 +197,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     alignItems: 'center',
   },
+  createBtnDisabled: { opacity: 0.5 },
   createBtnText: {
     fontFamily: theme.fonts.barlowExtraBold,
     fontSize: 13, letterSpacing: 1.5,

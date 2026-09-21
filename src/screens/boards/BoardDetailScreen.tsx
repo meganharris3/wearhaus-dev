@@ -125,8 +125,16 @@ export default function BoardDetailScreen() {
 
   const visCfg = VIS_COLORS[board.visibility];
 
+  async function run(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (e) {
+      Alert.alert('Something went wrong', e instanceof Error ? e.message : 'Please try again.');
+    }
+  }
+
   function handleRemove(itemId: string) {
-    removeItemFromBoard(board.id, itemId);
+    run(() => removeItemFromBoard(board.id, itemId));
   }
 
   function handleMove(itemId: string) {
@@ -141,7 +149,7 @@ export default function BoardDetailScreen() {
       [
         ...otherBoards.map((b) => ({
           text: b.name,
-          onPress: () => moveItemToBoard(board.id, b.id, itemId),
+          onPress: () => run(() => moveItemToBoard(board.id, b.id, itemId)),
         })),
         { text: 'Cancel', style: 'cancel' as const },
       ],
