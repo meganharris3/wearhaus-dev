@@ -28,6 +28,7 @@ import { useMessages } from '../../context/MessagesContext';
 import ItemCard from '../../components/ItemCard';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Item } from '../../types';
+import { buildProfileUpdates } from '../../utils/profileUpdates';
 
 
 function getInitials(name: string): string {
@@ -514,13 +515,14 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
       if (localAvatar && user?.id) {
         newAvatarUrl = await uploadAvatar(localAvatar, user.id);
       }
-      await updateProfile({
-        display_name: nameInput.trim(),
-        username: usernameInput.trim().replace(/^@/, '').replace(/\s+/g, '_').toLowerCase(),
-        university: locationInput.trim(),
-        bio: bioInput.trim(),
-        ...(newAvatarUrl ? { avatar_url: newAvatarUrl } : {}),
-      });
+      await updateProfile(buildProfileUpdates({
+        profile,
+        name: nameInput,
+        username: usernameInput,
+        location: locationInput,
+        bio: bioInput,
+        avatarUrl: newAvatarUrl,
+      }));
       setIsEditing(false);
       setLocalAvatar(null);
     } catch (err) {

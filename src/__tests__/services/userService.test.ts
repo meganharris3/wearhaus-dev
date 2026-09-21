@@ -75,6 +75,38 @@ describe('fetchUserProfile', () => {
       'id, display_name, username, avatar_url, university, bio, items_listed, rentals_completed, rating, campus_verified, campus_id, campus_name, school_email, interests, onboarding_complete'
     );
   });
+
+  it('falls back to the base columns when a newer column is genuinely missing', async () => {
+    const full: any = {};
+    full.select = jest.fn().mockReturnValue(full);
+    full.eq     = jest.fn().mockReturnValue(full);
+    full.single = jest.fn().mockResolvedValue({
+      data: null, error: { code: '42703', message: 'column users.campus_verified does not exist' },
+    });
+    const base: any = {};
+    base.select = jest.fn().mockReturnValue(base);
+    base.eq     = jest.fn().mockReturnValue(base);
+    base.single = jest.fn().mockResolvedValue({ data: makeProfile(), error: null });
+    mockFrom.mockReturnValueOnce(full).mockReturnValueOnce(base);
+
+    const result = await fetchUserProfile('u1');
+
+    expect(result?.display_name).toBe('Maya Chen');
+    expect(base.select).toHaveBeenCalledWith(expect.not.stringContaining('username'));
+  });
+
+  it('does not fall back (or hide the error) for an unrelated error that merely mentions a column', async () => {
+    const chain: any = {};
+    chain.select = jest.fn().mockReturnValue(chain);
+    chain.eq     = jest.fn().mockReturnValue(chain);
+    chain.single = jest.fn().mockResolvedValue({
+      data: null, error: { code: '42501', message: 'permission denied for column username' },
+    });
+    mockFrom.mockReturnValue(chain);
+
+    await expect(fetchUserProfile('u1')).rejects.toThrow('permission denied');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -121,7 +153,7 @@ describe('updateUserProfile', () => {
 
   it('passes partial updates correctly', async () => {
     const updateChain = makeUpdateChain({ error: null });
-    const readBackChain = makeReadBackChain(makeProfile());
+    const readBackChain = makeReadBackChain(makeProfile({ bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' }));
     mockFrom.mockReturnValueOnce(updateChain).mockReturnValueOnce(readBackChain);
 
     await updateUserProfile('u1', 'u1@test.com', { bio: 'Fashion lover', avatar_url: 'https://img.test/a.png' });
@@ -133,7 +165,7 @@ describe('updateUserProfile', () => {
 
   it('can update only avatar_url', async () => {
     const updateChain = makeUpdateChain({ error: null });
-    const readBackChain = makeReadBackChain(makeProfile());
+    const readBackChain = makeReadBackChain(makeProfile({ avatar_url: 'https://cdn.test/photo.jpg' }));
     mockFrom.mockReturnValueOnce(updateChain).mockReturnValueOnce(readBackChain);
 
     await updateUserProfile('u1', 'u1@test.com', { avatar_url: 'https://cdn.test/photo.jpg' });
@@ -141,5 +173,76 @@ describe('updateUserProfile', () => {
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ avatar_url: 'https://cdn.test/photo.jpg' }),
     );
+  });
+
+  // -------------------------------------------------------------------------
+  // Regressions: saves that used to "succeed" without saving
+  // -------------------------------------------------------------------------
+  describe('does not report success when nothing was saved', () => {
+    it("throws when the update returns no error but the row didn't change (silent no-op)", async () => {
+      // e.g. RLS filters the row out: PostgREST answers with no error and zero rows updated.
+      mockFrom
+        .mockReturnValueOnce(makeUpdateChain({ error: null }))
+        .mockReturnValueOnce(makeReadBackChain(makeProfile({ display_name: 'Old Name' })));
+
+      await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name' }))
+        .rejects.toThrow(/weren't saved/i);
+    });
+
+    it('checks every field that was sent, not just the display name', async () => {
+      mockFrom
+        .mockReturnValueOnce(makeUpdateChain({ error: null }))
+        .mockReturnValueOnce(makeReadBackChain(makeProfile({ display_name: 'New Name', username: 'old_handle' })));
+
+      await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name', username: 'new_handle' }))
+        .rejects.toThrow(/weren't saved/i);
+    });
+
+    it('succeeds when the read-back matches everything that was sent', async () => {
+      mockFrom
+        .mockReturnValueOnce(makeUpdateChain({ error: null }))
+        .mockReturnValueOnce(makeReadBackChain(
+          makeProfile({ display_name: 'New Name', username: 'new_handle', bio: '', university: 'NYU' }),
+        ));
+
+      const saved = await updateUserProfile('u1', 'u1@test.com', {
+        display_name: 'New Name', username: 'new_handle', bio: '', university: 'NYU',
+      });
+
+      expect(saved).toMatchObject({ display_name: 'New Name', username: 'new_handle', university: 'NYU' });
+    });
+  });
+
+  describe('username errors', () => {
+    it('tells the user a taken username is taken — and saves nothing, instead of retrying without it', async () => {
+      mockFrom.mockReturnValue(makeUpdateChain({
+        error: { code: '23505', message: 'duplicate key value violates unique constraint "users_username_key"' },
+      }));
+
+      await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name', username: 'maya' }))
+        .rejects.toThrow(/username.*already taken/i);
+      expect(mockFrom).toHaveBeenCalledTimes(1); // no fallback write that drops the username
+    });
+
+    it.each([
+      ['undefined_column', { code: '42703', message: 'column "username" of relation "users" does not exist' }],
+      ['schema cache',     { code: 'PGRST204', message: "Could not find the 'username' column of 'users' in the schema cache" }],
+    ])('explains a missing username column (%s) instead of silently dropping the username', async (_name, error) => {
+      mockFrom.mockReturnValue(makeUpdateChain({ error }));
+
+      await expect(updateUserProfile('u1', 'u1@test.com', { display_name: 'New Name', username: 'maya' }))
+        .rejects.toThrow(/003_add_username/);
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not mistake an unrelated error that mentions "username" or "column" for a missing column', async () => {
+      mockFrom.mockReturnValue(makeUpdateChain({
+        error: { code: '23514', message: 'new row violates check constraint "users_username_check" on column "username"' },
+      }));
+
+      await expect(updateUserProfile('u1', 'u1@test.com', { username: 'x' }))
+        .rejects.toThrow('violates check constraint');
+      expect(mockFrom).toHaveBeenCalledTimes(1);
+    });
   });
 });
