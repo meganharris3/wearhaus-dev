@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,7 @@ import {
   Dimensions,
   KeyboardAvoidingView,
   Platform,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -60,7 +61,7 @@ function CommentRow({ comment }: { comment: Comment }) {
 export default function ItemDetailScreen({ route }: Props) {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
   const { user } = useAuth();
-  const { isFavorited, toggleFavorite, favoriteCount, getComments, addComment } = useInteractions();
+  const { isFavorited, toggleFavorite, favoriteCount, getComments, loadComments, addComment } = useInteractions();
   const { findThreadByUser } = useMessages();
   const { item } = route.params;
 
@@ -89,11 +90,21 @@ export default function ItemDetailScreen({ route }: Props) {
     setActiveIndex(index);
   }
 
-  const handleSendComment = useCallback(() => {
-    if (!commentText.trim()) return;
-    addComment(item.id, commentText);
+  useEffect(() => {
+    loadComments(item.id).catch((e) => console.warn('Failed to load comments', e));
+  }, [item.id, loadComments]);
+
+  const handleSendComment = useCallback(async () => {
+    const text = commentText;
+    if (!text.trim()) return;
     setCommentText('');
-    setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    try {
+      await addComment(item.id, text);
+      setTimeout(() => scrollViewRef.current?.scrollToEnd({ animated: true }), 100);
+    } catch (e) {
+      setCommentText(text); // give the text back so nothing is lost
+      Alert.alert('Could not post comment', e instanceof Error ? e.message : 'Please try again.');
+    }
   }, [commentText, item.id, addComment]);
 
   return (

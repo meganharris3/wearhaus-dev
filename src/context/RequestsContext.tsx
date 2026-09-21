@@ -1,4 +1,14 @@
-import React, { createContext, useContext, useState, useMemo, useCallback } from 'react';
+import React, { createContext, useContext, useState, useMemo, useCallback, useEffect } from 'react';
+import { useAuth } from './AuthContext';
+import {
+  fetchNotifications,
+  markNotificationRead,
+  markAllNotificationsRead,
+  type NotificationRow,
+} from '../services/notificationService';
+import { acceptFriendRequest, declineFriendRequest } from '../services/friendService';
+import { respondToBorrowRequest } from '../services/messageService';
+import { formatMessageTime } from '../utils/dateUtils';
 
 export type RequestStatus = 'pending' | 'accepted' | 'declined';
 export type NotificationType =
@@ -25,90 +35,126 @@ export interface Request {
   total?: number;
 }
 
-const INITIAL_REQUESTS: Request[] = [
-  {
-    id: 'req_1', type: 'borrow_request', status: 'pending', read: false,
-    borrowerName: 'Jade T.', itemName: 'Ribbed Cami Mini Dress',
-    days: 2, dateRange: 'Jun 30 – Jul 2', createdAt: '2m ago',
-  },
-  {
-    id: 'req_2', type: 'borrow_request', status: 'pending', read: false,
-    borrowerName: 'Priya M.', itemName: 'Plaid Micro Mini Skirt',
-    days: 3, dateRange: 'Jul 1 – Jul 4', createdAt: '1h ago',
-  },
-  {
-    id: 'req_3', type: 'borrow_request', status: 'pending', read: false,
-    borrowerName: 'Sophie R.', itemName: 'Lace Corset Top',
-    days: 1, dateRange: 'Jun 30', createdAt: '3h ago',
-  },
-  {
-    id: 'req_4', type: 'borrow_accepted', status: 'accepted', read: true,
-    borrowerName: 'Ava L.', itemName: 'Satin Slip Mini Skirt',
-    dueBack: 'Jul 3', dateRange: null, createdAt: 'Yesterday',
-  },
-  {
-    id: 'req_5', type: 'friend_request', status: 'pending', read: false,
-    borrowerName: 'Chloe B.', itemName: '',
-    dateRange: null, createdAt: '5m ago',
-  },
-  {
-    id: 'req_6', type: 'friend_accepted', status: 'accepted', read: true,
-    borrowerName: 'Maya Chen', itemName: '',
-    dateRange: null, createdAt: '2h ago',
-  },
-  {
-    id: 'req_7', type: 'return_reminder', status: 'pending', read: false,
-    borrowerName: 'You', itemName: 'Mesh Cut-Out Mini Dress',
-    dueBack: 'Tomorrow', dateRange: null, createdAt: '10m ago',
-  },
-];
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * Maps a notification row to the display shape the screen uses. Returns null for
+ * rows with no UI (haus_invite / message / system) and for requests that have
+ * already been answered, from here or from the chat thread.
+ */
+function toRequest(row: NotificationRow): Request | null {
+  const base = { id: row.id, read: row.read, createdAt: formatMessageTime(row.createdAt) };
+  const p = row.payload;
+
+  switch (row.type) {
+    case 'friend_request':
+      if (row.resolved) return null;
+      return { ...base, type: 'friend_request', status: 'pending', borrowerName: str(p.from_name), itemName: '', dateRange: null };
+    case 'friend_accepted':
+      return { ...base, type: 'friend_accepted', status: 'accepted', borrowerName: str(p.from_name), itemName: '', dateRange: null };
+    case 'borrow_request':
+      if (row.resolved) return null;
+      return {
+        ...base, type: 'borrow_request', status: 'pending',
+        borrowerName: str(p.borrower_name), itemName: str(p.item_name),
+        days: typeof p.days === 'number' ? p.days : undefined,
+        dateRange: str(p.date_range) || null, direction: 'incoming',
+      };
+    case 'borrow_accepted':
+      return {
+        ...base, type: 'borrow_accepted', status: 'accepted',
+        borrowerName: str(p.from_name), itemName: str(p.item_name),
+        dueBack: str(p.due_back) || undefined, dateRange: null, direction: 'outgoing',
+      };
+    default:
+      return null;
+  }
+}
 
 interface RequestsContextValue {
   requests: Request[];
   pendingCount: number;
-  addRequest: (req: Omit<Request, 'id' | 'createdAt' | 'read' | 'status'>) => void;
-  acceptRequest: (id: string) => void;
-  declineRequest: (id: string) => void;
+  isLoading: boolean;
+  refreshRequests: () => Promise<void>;
+  acceptRequest: (id: string) => Promise<void>;
+  declineRequest: (id: string) => Promise<void>;
+  markAllRead: () => Promise<void>;
 }
 
 const RequestsContext = createContext<RequestsContextValue | null>(null);
 
 export function RequestsProvider({ children }: { children: React.ReactNode }) {
-  const [requests, setRequests] = useState<Request[]>(INITIAL_REQUESTS);
+  const { user, profile } = useAuth();
+  const userId = user?.id;
+  const [rows, setRows] = useState<NotificationRow[]>([]);
+  const [isLoading, setLoading] = useState(true);
+
+  const requests = useMemo(
+    () => rows.map(toRequest).filter((r): r is Request => r !== null),
+    [rows],
+  );
 
   const pendingCount = useMemo(
     () => requests.filter((r) => r.status === 'pending').length,
     [requests],
   );
 
-  const addRequest = useCallback(
-    (req: Omit<Request, 'id' | 'createdAt' | 'read' | 'status'>) => {
-      const newReq: Request = {
-        ...req,
-        id: `req_${Date.now()}`,
-        status: 'pending',
-        read: false,
-        createdAt: 'Just now',
-      };
-      setRequests((prev) => [newReq, ...prev]);
-    },
-    [],
-  );
+  const refreshRequests = useCallback(async () => {
+    if (!userId) { setRows([]); return; }
+    try {
+      setRows(await fetchNotifications(userId));
+    } catch (e) {
+      console.warn('Failed to load notifications', e);
+    }
+  }, [userId]);
 
-  const acceptRequest = useCallback((id: string) => {
-    setRequests((prev) =>
-      prev.map((r) => r.id === id ? { ...r, status: 'accepted', read: true } : r),
-    );
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    refreshRequests().finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, [refreshRequests]);
+
+  const resolveLocally = useCallback((id: string) => {
+    setRows((prev) => prev.map((r) => (r.id === id ? { ...r, read: true, resolved: true } : r)));
   }, []);
 
-  const declineRequest = useCallback((id: string) => {
-    setRequests((prev) =>
-      prev.map((r) => r.id === id ? { ...r, status: 'declined', read: true } : r),
-    );
-  }, []);
+  const respond = useCallback(async (id: string, status: 'accepted' | 'declined') => {
+    if (!userId) throw new Error('Not authenticated');
+    const row = rows.find((r) => r.id === id);
+    if (!row) return;
+
+    if (row.type === 'friend_request') {
+      const friendshipId = str(row.payload.friendship_id);
+      if (status === 'accepted') await acceptFriendRequest(friendshipId, userId);
+      else await declineFriendRequest(friendshipId, userId);
+    } else if (row.type === 'borrow_request') {
+      const firstName = (profile?.display_name ?? 'Someone').split(' ')[0];
+      await respondToBorrowRequest(
+        str(row.payload.message_id), str(row.payload.thread_id), userId, status, firstName,
+      );
+    } else {
+      return;
+    }
+
+    resolveLocally(id);
+    // The server-side triggers already mark the notification resolved; this only clears the unread dot.
+    markNotificationRead(id).catch(() => {});
+  }, [userId, profile?.display_name, rows, resolveLocally]);
+
+  const acceptRequest = useCallback((id: string) => respond(id, 'accepted'), [respond]);
+  const declineRequest = useCallback((id: string) => respond(id, 'declined'), [respond]);
+
+  const markAllRead = useCallback(async () => {
+    if (!userId) return;
+    await markAllNotificationsRead(userId);
+    setRows((prev) => prev.map((r) => (r.read ? r : { ...r, read: true })));
+  }, [userId]);
 
   return (
-    <RequestsContext.Provider value={{ requests, pendingCount, addRequest, acceptRequest, declineRequest }}>
+    <RequestsContext.Provider
+      value={{ requests, pendingCount, isLoading, refreshRequests, acceptRequest, declineRequest, markAllRead }}
+    >
       {children}
     </RequestsContext.Provider>
   );

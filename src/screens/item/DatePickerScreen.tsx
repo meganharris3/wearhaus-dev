@@ -13,7 +13,6 @@ import {
   parseDate, formatRange, formatDateShort,
   diffInDays, addMonths,
 } from '../../utils/dateUtils';
-import { useRequests } from '../../context/RequestsContext';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
 
@@ -28,7 +27,6 @@ export default function DatePickerScreen({ route, navigation }: Props) {
     ...(av?.blockedRanges ?? []), // borrower sees both as unavailable
   ];
 
-  const { addRequest } = useRequests();
   const { createThread } = useMessages();
   const { user, profile } = useAuth();
   const [isRequesting, setIsRequesting] = useState(false);
@@ -110,16 +108,6 @@ export default function DatePickerScreen({ route, navigation }: Props) {
       setIsRequesting(false);
       return;
     }
-
-    addRequest({
-      borrowerName: 'You',
-      itemName: item.name,
-      days,
-      dateRange: formatRange(selectedStart!, selectedEnd!),
-      direction: 'outgoing',
-      ownerName: item.owner?.display_name,
-      total,
-    });
 
     navigation.navigate('ChatThread', { threadId });
   }

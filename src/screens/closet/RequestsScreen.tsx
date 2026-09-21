@@ -1,13 +1,14 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   FlatList,
   Pressable,
   StyleSheet,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { theme } from '../../theme';
 import { useRequests, Request, RequestStatus } from '../../context/RequestsContext';
 
@@ -25,6 +26,28 @@ const STATUS_COLOR: Record<RequestStatus, string> = {
   accepted: theme.colors.yellowBorder,
   declined: '#9A9888',
 };
+
+function labelFor(request: Request): string {
+  if (request.type === 'friend_request') return 'FRIEND REQUEST';
+  if (request.type === 'friend_accepted') return 'NEW FRIEND';
+  if (request.type === 'borrow_accepted') return 'REQUEST ACCEPTED';
+  return STATUS_LABEL[request.status];
+}
+
+function bodyFor(request: Request): string {
+  const days = request.days ?? 1;
+  switch (request.type) {
+    case 'friend_request':  return ' sent you a friend request.';
+    case 'friend_accepted': return ' accepted your friend request.';
+    case 'borrow_accepted': return ` accepted your request to borrow ${request.itemName}. Due back ${request.dueBack ?? 'TBD'}.`;
+    default:
+      if (request.status === 'pending')
+        return ` wants to borrow your ${request.itemName} for ${days} day${days > 1 ? 's' : ''}.`;
+      if (request.status === 'accepted')
+        return ` is borrowing your ${request.itemName}. Due back ${request.dueBack ?? 'TBD'}.`;
+      return ` requested your ${request.itemName}.`;
+  }
+}
 
 function filterNotifs(notifs: Request[], tab: FilterTab): Request[] {
   switch (tab) {
@@ -44,10 +67,23 @@ function filterNotifs(notifs: Request[], tab: FilterTab): Request[] {
 
 export default function RequestsScreen() {
   const navigation = useNavigation();
-  const { requests, pendingCount, acceptRequest, declineRequest } = useRequests();
+  const { requests, pendingCount, refreshRequests, acceptRequest, declineRequest, markAllRead } = useRequests();
   const [activeTab, setActiveTab] = useState<FilterTab>('All');
 
   const filtered = useMemo(() => filterNotifs(requests, activeTab), [requests, activeTab]);
+
+  useFocusEffect(useCallback(() => { refreshRequests(); }, [refreshRequests]));
+
+  // Leaving the screen counts as having seen everything on it.
+  useEffect(() => () => { markAllRead().catch(() => {}); }, [markAllRead]);
+
+  async function respond(action: () => Promise<void>) {
+    try {
+      await action();
+    } catch (e) {
+      Alert.alert('Something went wrong', e instanceof Error ? e.message : 'Please try again.');
+    }
+  }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -88,8 +124,8 @@ export default function RequestsScreen() {
         renderItem={({ item }) => (
           <RequestItem
             request={item}
-            onAccept={() => acceptRequest(item.id)}
-            onDecline={() => declineRequest(item.id)}
+            onAccept={() => respond(() => acceptRequest(item.id))}
+            onDecline={() => respond(() => declineRequest(item.id))}
           />
         )}
         contentContainerStyle={styles.listContent}
@@ -126,7 +162,7 @@ function RequestItem({
         {/* Top row: type label + time */}
         <View style={itemStyles.topRow}>
           <Text style={[itemStyles.typeLabel, { color: STATUS_COLOR[request.status] }]}>
-            {STATUS_LABEL[request.status]}
+            {labelFor(request)}
           </Text>
           <Text style={itemStyles.time}>{request.createdAt}</Text>
         </View>
@@ -134,11 +170,7 @@ function RequestItem({
         {/* Body */}
         <Text style={itemStyles.body}>
           <Text style={itemStyles.bodyBold}>{request.borrowerName}</Text>
-          {isPending
-            ? ` wants to borrow your ${request.itemName} for ${request.days} day${(request.days ?? 1) > 1 ? 's' : ''}.`
-            : isAccepted
-            ? ` is borrowing your ${request.itemName}. Due back ${request.dueBack ?? 'TBD'}.`
-            : ` requested your ${request.itemName}.`}
+          {bodyFor(request)}
         </Text>
 
         {/* Date pill — pending only */}
