@@ -134,11 +134,11 @@ export default function BoardDetailScreen() {
   }
 
   function handleRemove(itemId: string) {
-    run(() => removeItemFromBoard(board.id, itemId));
+    run(() => removeItemFromBoard(boardId, itemId));
   }
 
   function handleMove(itemId: string) {
-    const otherBoards = boards.filter((b) => b.id !== board.id);
+    const otherBoards = boards.filter((b) => b.id !== boardId);
     if (otherBoards.length === 0) {
       Alert.alert('No other boards', 'Create another board first.');
       return;
@@ -149,7 +149,7 @@ export default function BoardDetailScreen() {
       [
         ...otherBoards.map((b) => ({
           text: b.name,
-          onPress: () => run(() => moveItemToBoard(board.id, b.id, itemId)),
+          onPress: () => run(() => moveItemToBoard(boardId, b.id, itemId)),
         })),
         { text: 'Cancel', style: 'cancel' as const },
       ],
@@ -161,11 +161,11 @@ export default function BoardDetailScreen() {
   }
 
   function openAddItems() {
-    navigation.navigate('AddItemsToBoard', { boardId: board.id });
+    navigation.navigate('AddItemsToBoard', { boardId: boardId });
   }
 
   function openEdit() {
-    navigation.navigate('CreateBoard', { boardId: board.id });
+    navigation.navigate('CreateBoard', { boardId: boardId });
   }
 
   return (

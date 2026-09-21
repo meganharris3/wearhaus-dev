@@ -72,6 +72,7 @@ export interface Friend {
   initials: string;
   avatarColor: string;
   itemsShared: number;
+  avatar_url?: string;
 }
 
 export interface FriendRequest {
@@ -96,6 +97,7 @@ export interface SuggestedFriend {
   sharedHaus: string;
   mutual: number;
   requestStatus: null | 'pending';
+  avatar_url?: string;
 }
 
 export interface Haus {

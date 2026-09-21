@@ -226,7 +226,7 @@ const s = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   checkOverlay: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     backgroundColor: 'rgba(255,255,173,0.55)',
     alignItems: 'center', justifyContent: 'center',
   },
