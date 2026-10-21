@@ -1,6 +1,7 @@
 node_modules/
 .expo/
 dist/
+.vercel
 npm-debug.*
 *.jks
 *.p8
@@ -35,4 +36,4 @@ vite.config.js
 tailwind.config.js
 postcss.config.js
 eslint.config.js
-index.html
+/index.html

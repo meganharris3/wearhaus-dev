@@ -15,6 +15,9 @@
     "android": {
       "package": "com.wearhaus.app"
     },
+    "web": {
+      "bundler": "metro"
+    },
     "extra": {
       "eas": {
         "projectId": "29a75092-2c03-4222-9dc8-add198253d8b"
