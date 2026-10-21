@@ -35,8 +35,11 @@ beforeEach(() => {
 // signUp
 // ---------------------------------------------------------------------------
 describe('signUp', () => {
-  it('returns null error on success', async () => {
-    mockSignUp.mockResolvedValueOnce({ error: null });
+  it('returns null error and no confirmation flags when a session is created immediately (confirm email OFF)', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: { id: 'u1', identities: [{ id: 'i1' }] }, session: { access_token: 'tok' } },
+      error: null,
+    });
 
     const result = await signUp('user@test.com', 'secret', 'Test User');
 
@@ -45,19 +48,61 @@ describe('signUp', () => {
       password: 'secret',
       options:  { data: { display_name: 'Test User' } },
     });
-    expect(result.error).toBeNull();
+    expect(result).toEqual({ error: null, needsEmailConfirmation: false, mayAlreadyHaveAccount: false });
   });
 
-  it('returns error message when Supabase returns an error', async () => {
-    mockSignUp.mockResolvedValueOnce({ error: { message: 'Email already registered' } });
+  it('flags needsEmailConfirmation when signUp succeeds with a user but no session (confirm email ON)', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: { id: 'u1', identities: [{ id: 'i1' }] }, session: null },
+      error: null,
+    });
+
+    const result = await signUp('user@test.com', 'secret', 'Test User');
+
+    expect(result).toEqual({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: false });
+  });
+
+  it('flags mayAlreadyHaveAccount when Supabase returns an obfuscated user (empty identities) for an existing confirmed account', async () => {
+    // Supabase's own anti-enumeration behaviour: signUp() "succeeds" (no error) for an email
+    // that already has a confirmed account, returning a fake user with identities: [].
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: { id: 'u1', identities: [] }, session: null },
+      error: null,
+    });
 
     const result = await signUp('existing@test.com', 'secret', 'Test User');
 
-    expect(result.error).toEqual({ message: 'Email already registered' });
+    expect(result).toEqual({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: true });
+  });
+
+  it('does not flag mayAlreadyHaveAccount when identities is simply absent from the response', async () => {
+    mockSignUp.mockResolvedValueOnce({ data: { user: { id: 'u1' }, session: null }, error: null });
+
+    const result = await signUp('user@test.com', 'secret', 'Test User');
+
+    expect(result.mayAlreadyHaveAccount).toBe(false);
+  });
+
+  it('returns error message when Supabase returns an error, with both flags false', async () => {
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: null, session: null },
+      error: { message: 'Email already registered' },
+    });
+
+    const result = await signUp('existing@test.com', 'secret', 'Test User');
+
+    expect(result).toEqual({
+      error: { message: 'Email already registered' },
+      needsEmailConfirmation: false,
+      mayAlreadyHaveAccount: false,
+    });
   });
 
   it('passes displayName in options.data', async () => {
-    mockSignUp.mockResolvedValueOnce({ error: null });
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: { id: 'u1', identities: [{ id: 'i1' }] }, session: { access_token: 'tok' } },
+      error: null,
+    });
 
     await signUp('a@b.com', 'pw', 'Jordan');
 

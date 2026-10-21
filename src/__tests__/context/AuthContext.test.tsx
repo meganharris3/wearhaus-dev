@@ -269,25 +269,45 @@ describe('signIn', () => {
 });
 
 describe('signUp', () => {
-  it('passes the display name through and returns null error on success', async () => {
-    mockSignUp.mockResolvedValue({ error: null });
+  it('passes the display name through and returns null error when a session comes back immediately', async () => {
+    mockSignUp.mockResolvedValue({ error: null, needsEmailConfirmation: false, mayAlreadyHaveAccount: false });
     await renderProvider();
 
     let result: unknown;
     await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
 
     expect(mockSignUp).toHaveBeenCalledWith('u@test.com', 'pass', 'Maya');
-    expect(result).toEqual({ error: null });
+    expect(result).toEqual({ error: null, needsEmailConfirmation: false, mayAlreadyHaveAccount: false });
   });
 
   it('returns the error message on failure', async () => {
-    mockSignUp.mockResolvedValue({ error: { message: 'Email taken' } });
+    mockSignUp.mockResolvedValue({ error: { message: 'Email taken' }, needsEmailConfirmation: false, mayAlreadyHaveAccount: false });
     await renderProvider();
 
     let result: unknown;
     await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
 
-    expect(result).toEqual({ error: 'Email taken' });
+    expect(result).toEqual({ error: 'Email taken', needsEmailConfirmation: false, mayAlreadyHaveAccount: false });
+  });
+
+  it('passes needsEmailConfirmation through when the account needs confirming', async () => {
+    mockSignUp.mockResolvedValue({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: false });
+    await renderProvider();
+
+    let result: unknown;
+    await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
+
+    expect(result).toEqual({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: false });
+  });
+
+  it('passes mayAlreadyHaveAccount through', async () => {
+    mockSignUp.mockResolvedValue({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: true });
+    await renderProvider();
+
+    let result: unknown;
+    await act(async () => { result = await auth.signUp('u@test.com', 'pass', 'Maya'); });
+
+    expect(result).toEqual({ error: null, needsEmailConfirmation: true, mayAlreadyHaveAccount: true });
   });
 });
 

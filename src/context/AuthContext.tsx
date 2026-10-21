@@ -13,7 +13,11 @@ interface AuthContextValue {
   profile: UserProfile | null;
   loading: boolean;
   signIn: (email: string, password: string) => Promise<{ error: string | null }>;
-  signUp: (email: string, password: string, displayName: string) => Promise<{ error: string | null }>;
+  signUp: (email: string, password: string, displayName: string) => Promise<{
+    error: string | null;
+    needsEmailConfirmation: boolean;
+    mayAlreadyHaveAccount: boolean;
+  }>;
   signOut: () => Promise<void>;
   updateProfile: (updates: Partial<Pick<UserProfile, 'display_name' | 'username' | 'avatar_url' | 'bio' | 'university'>>) => Promise<void>;
   refreshProfile: () => Promise<void>;
@@ -67,8 +71,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   };
 
   const handleSignUp = async (email: string, password: string, displayName: string) => {
-    const { error } = await _signUp(email, password, displayName);
-    return { error: error?.message ?? null };
+    const { error, needsEmailConfirmation, mayAlreadyHaveAccount } = await _signUp(email, password, displayName);
+    return { error: error?.message ?? null, needsEmailConfirmation, mayAlreadyHaveAccount };
   };
 
   // Pull the live session from Supabase storage rather than React state.

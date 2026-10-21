@@ -30,6 +30,9 @@ export default function SignupScreen() {
   const [password, setPassword]       = useState('');
   const [loading, setLoading]         = useState(false);
   const [error, setError]             = useState<string | null>(null);
+  // Non-null once signUp succeeds but needs email confirmation before it can sign in — holds
+  // the address so the confirmation view can say exactly where the link was sent.
+  const [pendingEmail, setPendingEmail] = useState<string | null>(null);
 
   async function handleSignUp() {
     if (!displayName.trim() || !email.trim() || !password) {
@@ -38,10 +41,60 @@ export default function SignupScreen() {
     }
     setLoading(true);
     setError(null);
-    const { error: err } = await signUp(email.trim(), password, displayName.trim());
+    const trimmedEmail = email.trim();
+    const { error: err, needsEmailConfirmation, mayAlreadyHaveAccount } =
+      await signUp(trimmedEmail, password, displayName.trim());
     setLoading(false);
-    if (err) setError(err);
-    // On success RootNavigator automatically switches to AppStack via session state
+    if (err) { setError(err); return; }
+    if (mayAlreadyHaveAccount) {
+      // Supabase won't say so directly (see authService.signUp) — it "succeeds" with no error
+      // and no new confirmation email sent, so telling them to check their email here would be
+      // actively misleading.
+      setError('An account with this email may already exist. Try signing in instead.');
+      return;
+    }
+    if (needsEmailConfirmation) {
+      setPendingEmail(trimmedEmail);
+      return;
+    }
+    // Otherwise a session came back immediately — RootNavigator switches to the app on its own.
+  }
+
+  if (pendingEmail) {
+    return (
+      <SafeAreaView style={styles.safe}>
+        <View style={styles.scroll}>
+          <View style={styles.wordmarkRow}>
+            <Text style={styles.wordmark}>
+              <Text style={styles.wear}>WEAR</Text>
+              <Text style={styles.haus}> HAUS</Text>
+            </Text>
+          </View>
+
+          <Text style={styles.confirmHeading}>CHECK YOUR EMAIL</Text>
+          <Text style={styles.confirmBody}>
+            We sent a confirmation link to{'\n'}
+            <Text style={styles.confirmEmail}>{pendingEmail}</Text>
+            {'\n'}Tap it, then come back and sign in.
+          </Text>
+
+          {/* styles.form is just "full width within the centered screen" here — its own
+              fields aren't relevant, but the button below needs the same width the
+              CREATE ACCOUNT button gets from being inside it. */}
+          <View style={styles.form}>
+            <Pressable style={styles.createButton} onPress={() => navigation.navigate('Login')}>
+              <Text style={styles.createButtonText}>BACK TO SIGN IN</Text>
+            </Pressable>
+          </View>
+
+          <Pressable style={styles.linkRow} onPress={() => setPendingEmail(null)}>
+            <Text style={styles.linkText}>
+              Wrong email? <Text style={styles.linkBold}>Try again</Text>
+            </Text>
+          </Pressable>
+        </View>
+      </SafeAreaView>
+    );
   }
 
   return (
@@ -167,6 +220,26 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
+  },
+  confirmHeading: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 18,
+    letterSpacing: 1.5,
+    color: theme.colors.ink,
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  confirmBody: {
+    fontFamily: theme.fonts.interRegular,
+    fontSize: 14,
+    lineHeight: 21,
+    color: theme.colors.muted,
+    textAlign: 'center',
+    marginBottom: theme.spacing.xl,
+  },
+  confirmEmail: {
+    fontFamily: theme.fonts.interSemiBold,
+    color: theme.colors.ink,
   },
   form: {
     width: '100%',
