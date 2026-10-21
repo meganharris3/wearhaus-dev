@@ -55,46 +55,48 @@ export function ClosetProvider({ children }: { children: React.ReactNode }) {
   async function addItem(item: Item) {
     let finalItem = item;
 
-    // Save to Supabase if logged in
+    // Save to Supabase if logged in. Let a failure here reject the whole call — a signed-in
+    // user's item of record IS the Supabase row; silently falling back to the local item (with
+    // its fake client-side id, e.g. a Date.now() string) left a phantom item in state that
+    // looked real but wasn't. Every later action needing a real items.id (favoriting,
+    // commenting, adding to a board...) would then fail against it with a confusing
+    // "invalid input syntax for type uuid" error instead of the save itself ever being reported
+    // as failed.
     if (user?.id) {
-      try {
-        const inserted = await insertItem(
-          {
-            name:            item.name,
-            description:     item.description,
-            photo_url:       item.photo_url,
-            photo_urls:      item.photo_urls,
-            category:        item.category,
-            size_label:      item.size_label,
-            price_per_day:   item.price_per_day,
-            list_for_rental: item.list_for_rental,
-            max_duration:    item.max_duration,
-            pickup_method:   item.pickup_method,
-            condition:       item.condition,
-            occasion_tags:   item.occasion_tags,
-            status:          item.status,
-            location_label:  item.location_label,
-            visibility:      item.visibility,
-            haus_visibility: item.haus_visibility,
-          },
-          user.id,
-        );
-        // Use Supabase-returned item for the real UUID, but keep photo_urls from the
-        // local item if the DB column doesn't exist yet (insertItem retries without it).
-        finalItem = {
-          ...inserted,
-          photo_urls:      inserted.photo_urls?.length ? inserted.photo_urls : item.photo_urls,
-          visibility:      inserted.visibility      ?? item.visibility,
-          haus_visibility: inserted.haus_visibility ?? item.haus_visibility,
-          list_for_rental: inserted.list_for_rental ?? item.list_for_rental,
-          max_duration:    inserted.max_duration    ?? item.max_duration,
-          pickup_method:   inserted.pickup_method   ?? item.pickup_method,
-          condition:       inserted.condition       ?? item.condition,
-          occasion_tags:   inserted.occasion_tags   ?? item.occasion_tags,
-        };
-      } catch {
-        // keep local item; photo URL already set by caller
-      }
+      const inserted = await insertItem(
+        {
+          name:            item.name,
+          description:     item.description,
+          photo_url:       item.photo_url,
+          photo_urls:      item.photo_urls,
+          category:        item.category,
+          size_label:      item.size_label,
+          price_per_day:   item.price_per_day,
+          list_for_rental: item.list_for_rental,
+          max_duration:    item.max_duration,
+          pickup_method:   item.pickup_method,
+          condition:       item.condition,
+          occasion_tags:   item.occasion_tags,
+          status:          item.status,
+          location_label:  item.location_label,
+          visibility:      item.visibility,
+          haus_visibility: item.haus_visibility,
+        },
+        user.id,
+      );
+      // Use Supabase-returned item for the real UUID, but keep photo_urls from the
+      // local item if the DB column doesn't exist yet (insertItem retries without it).
+      finalItem = {
+        ...inserted,
+        photo_urls:      inserted.photo_urls?.length ? inserted.photo_urls : item.photo_urls,
+        visibility:      inserted.visibility      ?? item.visibility,
+        haus_visibility: inserted.haus_visibility ?? item.haus_visibility,
+        list_for_rental: inserted.list_for_rental ?? item.list_for_rental,
+        max_duration:    inserted.max_duration    ?? item.max_duration,
+        pickup_method:   inserted.pickup_method   ?? item.pickup_method,
+        condition:       inserted.condition       ?? item.condition,
+        occasion_tags:   inserted.occasion_tags   ?? item.occasion_tags,
+      };
     }
 
     const updated = [finalItem, ...items];

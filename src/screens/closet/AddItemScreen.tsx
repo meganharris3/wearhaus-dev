@@ -261,8 +261,8 @@ export default function AddItemScreen() {
         await addItem(buildItem(status, allUrls));
       }
       navigation.goBack();
-    } catch {
-      Alert.alert('Error', 'Could not save item. Please try again.');
+    } catch (e) {
+      Alert.alert('Could not save item', e instanceof Error ? e.message : 'Please try again.');
     } finally {
       setIsUploading(false);
     }
