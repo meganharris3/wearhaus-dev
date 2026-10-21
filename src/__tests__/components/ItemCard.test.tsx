@@ -9,6 +9,16 @@
  */
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react-native';
+
+const mockToggleFavorite = jest.fn();
+let mockFavoritedIds = new Set<string>();
+jest.mock('../../context/InteractionsContext', () => ({
+  useInteractions: () => ({
+    isFavorited: (id: string) => mockFavoritedIds.has(id),
+    toggleFavorite: mockToggleFavorite,
+  }),
+}));
+
 import ItemCard from '../../components/ItemCard';
 import type { Item } from '../../types';
 
@@ -26,6 +36,11 @@ const makeItem = (overrides: Partial<Item> = {}): Item => ({
 });
 
 describe('ItemCard', () => {
+  beforeEach(() => {
+    mockToggleFavorite.mockClear();
+    mockFavoritedIds = new Set();
+  });
+
   it('renders the item name in uppercase', () => {
     render(<ItemCard item={makeItem()} onPress={jest.fn()} />);
     // Text component has textTransform uppercase in styles, but the raw text is the prop value
@@ -87,5 +102,47 @@ describe('ItemCard', () => {
   it('renders price with two decimal places for fractional cents', () => {
     render(<ItemCard item={makeItem({ price_per_day: 750 })} onPress={jest.fn()} />);
     expect(screen.getByText('$7.50/day')).toBeTruthy();
+  });
+});
+
+describe('ItemCard favoriting', () => {
+  beforeEach(() => {
+    mockToggleFavorite.mockClear();
+    mockFavoritedIds = new Set();
+  });
+
+  it('shows an outline heart when the item is not favorited', () => {
+    const { UNSAFE_getAllByType } = render(<ItemCard item={makeItem({ id: '1' })} onPress={jest.fn()} />);
+    const { Text } = require('react-native');
+    const icons = UNSAFE_getAllByType(require('@expo/vector-icons').Ionicons);
+    const heart = icons.find((n: any) => n.props.name === 'heart-outline' || n.props.name === 'heart');
+    expect(heart?.props.name).toBe('heart-outline');
+  });
+
+  it('shows a filled heart when the item is already favorited', () => {
+    mockFavoritedIds = new Set(['1']);
+    const { UNSAFE_getAllByType } = render(<ItemCard item={makeItem({ id: '1' })} onPress={jest.fn()} />);
+    const icons = UNSAFE_getAllByType(require('@expo/vector-icons').Ionicons);
+    const heart = icons.find((n: any) => n.props.name === 'heart-outline' || n.props.name === 'heart');
+    expect(heart?.props.name).toBe('heart');
+  });
+
+  it('calls toggleFavorite with the item id, and not onPress, when the heart is tapped', () => {
+    // fireEvent.press walks up from the queried node to the nearest Pressable ancestor — the
+    // heart button's own Pressable, not the card's outer one — matching real press behaviour.
+    const onPress = jest.fn();
+    render(<ItemCard item={makeItem({ id: '1' })} onPress={onPress} />);
+    fireEvent.press(screen.getByText('heart-outline'), { stopPropagation: jest.fn() });
+
+    expect(mockToggleFavorite).toHaveBeenCalledWith('1');
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('does not render a heart button when onEdit is provided (owner view)', () => {
+    const { UNSAFE_queryAllByType } = render(
+      <ItemCard item={makeItem({ id: '1' })} onPress={jest.fn()} onEdit={jest.fn()} />,
+    );
+    const icons = UNSAFE_queryAllByType(require('@expo/vector-icons').Ionicons);
+    expect(icons.some((n: any) => n.props.name === 'heart-outline' || n.props.name === 'heart')).toBe(false);
   });
 });

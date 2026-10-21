@@ -53,3 +53,11 @@ export async function addComment(itemId: string, authorId: string, text: string)
   if (error) throw new Error(error.message);
   return toComment(data);
 }
+
+/** Among the given item ids, returns the subset that has at least one favorite (by anyone). */
+export async function fetchItemIdsWithFavorites(itemIds: string[]): Promise<Set<string>> {
+  if (itemIds.length === 0) return new Set();
+  const { data, error } = await supabase.from('item_favorites').select('item_id').in('item_id', itemIds);
+  if (error) throw new Error(error.message);
+  return new Set((data ?? []).map((r: any) => r.item_id));
+}

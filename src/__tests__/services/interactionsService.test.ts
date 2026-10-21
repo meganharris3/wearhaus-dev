@@ -4,7 +4,7 @@
 
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const methods = ['select', 'eq', 'order', 'limit', 'insert', 'delete', 'update'];
+  const methods = ['select', 'eq', 'in', 'order', 'limit', 'insert', 'delete', 'update'];
   methods.forEach((m) => { chain[m] = jest.fn().mockReturnValue(chain); });
   chain.single = jest.fn().mockResolvedValue(result);
   chain.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
@@ -23,6 +23,7 @@ import {
   unfavoriteItem,
   fetchComments,
   addComment,
+  fetchItemIdsWithFavorites,
 } from '../../services/interactionsService';
 
 beforeEach(() => { jest.clearAllMocks(); });
@@ -157,5 +158,44 @@ describe('addComment', () => {
   it('throws on Supabase error', async () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'RLS violation' } }));
     await expect(addComment('i1', 'u1', 'x')).rejects.toThrow('RLS violation');
+  });
+});
+
+describe('fetchItemIdsWithFavorites', () => {
+  it('returns an empty set without querying when given no item ids', async () => {
+    const result = await fetchItemIdsWithFavorites([]);
+
+    expect(result).toEqual(new Set());
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('queries item_favorites filtered to the given item ids', async () => {
+    const chain = makeChain({ data: [{ item_id: 'i1' }], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchItemIdsWithFavorites(['i1', 'i2']);
+
+    expect(mockFrom).toHaveBeenCalledWith('item_favorites');
+    expect(chain.select).toHaveBeenCalledWith('item_id');
+    expect(chain.in).toHaveBeenCalledWith('item_id', ['i1', 'i2']);
+  });
+
+  it('dedupes multiple favoriters of the same item into one entry', async () => {
+    const chain = makeChain({ data: [{ item_id: 'i1' }, { item_id: 'i1' }, { item_id: 'i2' }], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await fetchItemIdsWithFavorites(['i1', 'i2']);
+
+    expect(result).toEqual(new Set(['i1', 'i2']));
+  });
+
+  it('returns an empty set when data is null', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
+    expect(await fetchItemIdsWithFavorites(['i1'])).toEqual(new Set());
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
+    await expect(fetchItemIdsWithFavorites(['i1'])).rejects.toThrow('DB error');
   });
 });

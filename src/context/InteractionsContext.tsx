@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect, useMemo } from 'react';
 import { useAuth } from './AuthContext';
 import {
   fetchFavoriteItemIds,
@@ -7,12 +7,16 @@ import {
   fetchComments,
   addComment as addCommentRemote,
 } from '../services/interactionsService';
-import type { Comment } from '../types';
+import { fetchItemsByIds } from '../services/itemService';
+import type { Comment, Item } from '../types';
 
 interface InteractionsContextValue {
   isFavorited: (itemId: string) => boolean;
   toggleFavorite: (itemId: string) => Promise<void>;
   favoriteCount: (itemId: string) => number;
+  /** Full Item rows for everything the signed-in user has favorited. */
+  favoritedItems: Item[];
+  favoritedItemsLoading: boolean;
   getComments: (itemId: string) => Comment[];
   /** Fetches the latest comments for an item into the cache (call when its detail opens). */
   loadComments: (itemId: string) => Promise<void>;
@@ -26,6 +30,8 @@ export function InteractionsProvider({ children }: { children: React.ReactNode }
   const userId = user?.id;
   const [favoritedIds, setFavoritedIds] = useState<Set<string>>(new Set());
   const [commentsByItem, setCommentsByItem] = useState<Record<string, Comment[]>>({});
+  const [favoritedItems, setFavoritedItems] = useState<Item[]>([]);
+  const [favoritedItemsLoading, setFavoritedItemsLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -35,6 +41,23 @@ export function InteractionsProvider({ children }: { children: React.ReactNode }
       .catch((e) => console.warn('Failed to load favorites', e));
     return () => { cancelled = true; };
   }, [userId]);
+
+  // A Set gets a new identity on every toggle even when its contents are unchanged, so key the
+  // refetch on the sorted, joined ids instead — otherwise every favorite/unfavorite would
+  // re-fetch the full item list even when nothing about the id set actually changed.
+  const favoritedIdsKey = useMemo(() => Array.from(favoritedIds).sort().join(','), [favoritedIds]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = favoritedIdsKey ? favoritedIdsKey.split(',') : [];
+    if (ids.length === 0) { setFavoritedItems([]); return; }
+    setFavoritedItemsLoading(true);
+    fetchItemsByIds(ids)
+      .then((items) => { if (!cancelled) setFavoritedItems(items); })
+      .catch((e) => console.warn('Failed to load favorited items', e))
+      .finally(() => { if (!cancelled) setFavoritedItemsLoading(false); });
+    return () => { cancelled = true; };
+  }, [favoritedIdsKey]);
 
   const isFavorited = useCallback((itemId: string) => favoritedIds.has(itemId), [favoritedIds]);
 
@@ -82,7 +105,11 @@ export function InteractionsProvider({ children }: { children: React.ReactNode }
   }, [userId]);
 
   return (
-    <InteractionsContext.Provider value={{ isFavorited, toggleFavorite, favoriteCount, getComments, loadComments, addComment }}>
+    <InteractionsContext.Provider value={{
+      isFavorited, toggleFavorite, favoriteCount,
+      favoritedItems, favoritedItemsLoading,
+      getComments, loadComments, addComment,
+    }}>
       {children}
     </InteractionsContext.Provider>
   );

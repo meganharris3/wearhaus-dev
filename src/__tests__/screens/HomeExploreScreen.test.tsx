@@ -32,6 +32,9 @@ jest.mock('../../context/RequestsContext', () => ({
 jest.mock('../../context/MessagesContext', () => ({
   useMessages: () => ({ unreadCount: 0 }),
 }));
+jest.mock('../../context/InteractionsContext', () => ({
+  useInteractions: () => ({ isFavorited: () => false, toggleFavorite: jest.fn() }),
+}));
 
 jest.mock('../../services/itemService', () => ({
   fetchFeedItems: jest.fn(),

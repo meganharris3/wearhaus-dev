@@ -61,6 +61,15 @@ jest.mock('../../context/RequestsContext', () => ({
   useRequests: () => ({ pendingCount: 0 }),
 }));
 
+let mockFavoritedItems: any[] = [];
+jest.mock('../../context/InteractionsContext', () => ({
+  useInteractions: () => ({
+    favoritedItems: mockFavoritedItems,
+    isFavorited: () => false,
+    toggleFavorite: jest.fn(),
+  }),
+}));
+
 jest.mock('expo-image-picker', () => ({
   requestMediaLibraryPermissionsAsync: jest.fn(),
   launchImageLibraryAsync: jest.fn(),
@@ -108,6 +117,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockProfile = { ...PROFILE };
   mockUpdateProfile.mockResolvedValue(undefined);
+  mockFavoritedItems = [];
   alertSpy = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
 });
 
@@ -202,5 +212,35 @@ describe('ProfileScreen save', () => {
     expect(mockUpdateProfile).not.toHaveBeenCalled();
     expect(screen.queryByText('Save')).toBeNull();
     expect(screen.getByText('Maya Chen')).toBeTruthy();
+  });
+});
+
+describe('ProfileScreen favorites', () => {
+  it('shows items I favorited that belong to other people', async () => {
+    mockFavoritedItems = [
+      { id: 'i1', owner_id: 'u2', name: 'Velvet Blazer', category: 'jacket', size_label: 'M', price_per_day: 1000, status: 'available', location_label: 'NYU' },
+    ];
+    render(<ProfileScreen />);
+    await settle();
+
+    expect(screen.getByText('Velvet Blazer')).toBeTruthy();
+  });
+
+  it('excludes my own items from the favorites section', async () => {
+    mockFavoritedItems = [
+      { id: 'i1', owner_id: 'u1', name: 'My Own Jacket', category: 'jacket', size_label: 'M', price_per_day: 1000, status: 'available', location_label: 'NYU' },
+    ];
+    render(<ProfileScreen />);
+    await settle();
+
+    expect(screen.queryByText('My Own Jacket')).toBeNull();
+  });
+
+  it('shows "No favorites yet" when there are none', async () => {
+    mockFavoritedItems = [];
+    render(<ProfileScreen />);
+    await settle();
+
+    expect(screen.getByText('No favorites yet')).toBeTruthy();
   });
 });

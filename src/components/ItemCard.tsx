@@ -1,8 +1,9 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../theme';
 import StatusTag from './StatusTag';
+import { useInteractions } from '../context/InteractionsContext';
 import type { Item, VisibilityMode } from '../types';
 
 const VIS_CONFIG: Record<VisibilityMode, {
@@ -35,7 +36,8 @@ interface ItemCardProps {
 
 function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
   const priceFormatted = `$${(item.price_per_day / 100).toFixed(2)}/day`;
-  const [liked, setLiked] = useState(false);
+  const { isFavorited, toggleFavorite } = useInteractions();
+  const liked = isFavorited(item.id);
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
@@ -84,7 +86,7 @@ function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
           </View>
           {!onEdit && (
             <Pressable
-              onPress={(e) => { e.stopPropagation(); setLiked((l) => !l); }}
+              onPress={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
               style={styles.heartBtn}
               hitSlop={6}
             >

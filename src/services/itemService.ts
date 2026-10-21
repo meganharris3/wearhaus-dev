@@ -130,3 +130,13 @@ export async function fetchMyItems(userId: string, tab: string, opts: PageOpts =
   if (error) throw new Error(error.message);
   return (data ?? []) as unknown as Item[];
 }
+
+export async function fetchItemsByIds(ids: string[]): Promise<Item[]> {
+  if (ids.length === 0) return [];
+  const { data, error } = await supabase
+    .from('items')
+    .select(ITEM_SELECT)
+    .in('id', ids);
+  if (error) throw new Error(error.message);
+  return (data ?? []) as unknown as Item[];
+}

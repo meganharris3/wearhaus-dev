@@ -13,7 +13,7 @@
 /** Creates a chainable builder whose final resolution is `result`. */
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const chainMethods = ['select', 'eq', 'ilike', 'order', 'limit', 'range', 'lte', 'single'];
+  const chainMethods = ['select', 'eq', 'ilike', 'order', 'limit', 'range', 'lte', 'single', 'in'];
 
   chainMethods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
@@ -41,6 +41,7 @@ import {
   searchItems,
   fetchItemById,
   fetchMyItems,
+  fetchItemsByIds,
 } from '../../services/itemService';
 import type { Item } from '../../types';
 
@@ -334,5 +335,44 @@ describe('fetchMyItems', () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
     const result = await fetchMyItems('u1', 'All');
     expect(result).toEqual([]);
+  });
+});
+
+describe('fetchItemsByIds', () => {
+  it('returns an empty array without querying when given no ids', async () => {
+    const result = await fetchItemsByIds([]);
+
+    expect(result).toEqual([]);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('queries items filtered to the given ids', async () => {
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchItemsByIds(['i1', 'i2']);
+
+    expect(mockFrom).toHaveBeenCalledWith('items');
+    expect(chain.in).toHaveBeenCalledWith('id', ['i1', 'i2']);
+  });
+
+  it('returns the matching items', async () => {
+    const items = [makeItem({ id: 'i1' }), makeItem({ id: 'i2' })];
+    mockFrom.mockReturnValue(makeChain({ data: items, error: null }));
+
+    const result = await fetchItemsByIds(['i1', 'i2']);
+
+    expect(result).toHaveLength(2);
+    expect(result.map((i) => i.id)).toEqual(['i1', 'i2']);
+  });
+
+  it('returns an empty array when data is null', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
+    expect(await fetchItemsByIds(['i1'])).toEqual([]);
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
+    await expect(fetchItemsByIds(['i1'])).rejects.toThrow('DB error');
   });
 });

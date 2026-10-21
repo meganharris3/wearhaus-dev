@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useState, useMemo, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   StyleSheet,
   Alert,
   Animated,
+  ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
@@ -22,6 +23,7 @@ import type { Item, Board, CoverStyle } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import { useCloset } from '../../context/ClosetContext';
 import { useBoards } from '../../context/BoardsContext';
+import { fetchItemIdsWithFavorites } from '../../services/interactionsService';
 
 // ─── Board components ──────────────────────────────────────────────────────────
 
@@ -194,15 +196,16 @@ const legendStyles = StyleSheet.create({
   },
 });
 
-type ClosetTab = 'All' | 'Listed' | 'Lent Out' | 'Borrowed';
-const TABS: ClosetTab[] = ['All', 'Listed', 'Lent Out', 'Borrowed'];
+type ClosetTab = 'All' | 'Listed' | 'Lent Out' | 'Borrowed' | 'Favorites';
+const TABS: ClosetTab[] = ['All', 'Listed', 'Lent Out', 'Borrowed', 'Favorites'];
 
-function filterItems(items: Item[], tab: ClosetTab): Item[] {
+function filterItems(items: Item[], tab: ClosetTab, favoritedIds: Set<string>): Item[] {
   switch (tab) {
-    case 'Listed':   return items.filter((i) => i.status === 'available' || i.status === 'wash' || i.status === 'draft');
-    case 'Lent Out': return items.filter((i) => i.status === 'lent');
-    case 'Borrowed': return [];
-    default:         return items;
+    case 'Listed':     return items.filter((i) => i.status === 'available' || i.status === 'wash' || i.status === 'draft');
+    case 'Lent Out':   return items.filter((i) => i.status === 'lent');
+    case 'Borrowed':   return [];
+    case 'Favorites':  return items.filter((i) => favoritedIds.has(i.id));
+    default:           return items;
   }
 }
 
@@ -214,7 +217,29 @@ export default function ClosetScreen() {
   const [activeTab,  setActiveTab]  = useState<ClosetTab>('All');
   const [viewMode,   setViewMode]   = useState<'gallery' | 'boards'>('gallery');
 
-  const filteredItems = useMemo(() => filterItems(allItems, activeTab), [allItems, activeTab]);
+  // Items someone has hearted, among the ones I own — i.e. which of MY pieces are popular.
+  // Keyed on the sorted, joined ids so an unrelated re-render of `allItems` (same ids, new
+  // array identity) doesn't trigger a refetch.
+  const [favoritedOwnIds,        setFavoritedOwnIds]        = useState<Set<string>>(new Set());
+  const [favoritedOwnIdsLoading, setFavoritedOwnIdsLoading] = useState(false);
+  const ownItemIdsKey = useMemo(() => allItems.map((i) => i.id).sort().join(','), [allItems]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const ids = ownItemIdsKey ? ownItemIdsKey.split(',') : [];
+    if (ids.length === 0) { setFavoritedOwnIds(new Set()); return; }
+    setFavoritedOwnIdsLoading(true);
+    fetchItemIdsWithFavorites(ids)
+      .then((favorited) => { if (!cancelled) setFavoritedOwnIds(favorited); })
+      .catch((e) => console.warn('Failed to load favorited items', e))
+      .finally(() => { if (!cancelled) setFavoritedOwnIdsLoading(false); });
+    return () => { cancelled = true; };
+  }, [ownItemIdsKey]);
+
+  const filteredItems = useMemo(
+    () => filterItems(allItems, activeTab, favoritedOwnIds),
+    [allItems, activeTab, favoritedOwnIds],
+  );
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
@@ -333,7 +358,9 @@ export default function ClosetScreen() {
                     })}
                   </ScrollView>
                 </View>
-                <Text style={styles.resultsLabel}>Your pieces — {filteredItems.length}</Text>
+                <Text style={styles.resultsLabel}>
+                  {activeTab === 'Favorites' ? `${filteredItems.length} favorited` : `Your pieces — ${filteredItems.length}`}
+                </Text>
               </>
             )}
           </>
@@ -341,7 +368,13 @@ export default function ClosetScreen() {
         ListFooterComponent={viewMode === 'gallery' && filteredItems.length > 0 ? <VisibilityLegend /> : null}
         ListEmptyComponent={viewMode === 'gallery' ? (
           <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>NO PIECES HERE YET</Text>
+            {activeTab === 'Favorites' && favoritedOwnIdsLoading ? (
+              <ActivityIndicator color={theme.colors.ink} />
+            ) : (
+              <Text style={styles.emptyText}>
+                {activeTab === 'Favorites' ? 'NO FAVORITES YET' : 'NO PIECES HERE YET'}
+              </Text>
+            )}
           </View>
         ) : null}
       />

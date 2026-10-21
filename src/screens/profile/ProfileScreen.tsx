@@ -25,6 +25,7 @@ import { useHauses } from '../../context/HausesContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useBorrows } from '../../context/BorrowsContext';
 import { useMessages } from '../../context/MessagesContext';
+import { useInteractions } from '../../context/InteractionsContext';
 import ItemCard from '../../components/ItemCard';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Item } from '../../types';
@@ -331,16 +332,17 @@ function ClosetHeader({ title, count }: {
 
 // ─── ClosetGallery ────────────────────────────────────────────────────────────
 
-function ClosetGallery({ items, onItemPress, onItemEdit, onItemDelete }: {
+function ClosetGallery({ items, onItemPress, onItemEdit, onItemDelete, emptyLabel = 'No items yet' }: {
   items: Item[];
   onItemPress: (item: Item) => void;
   onItemEdit?: (item: Item) => void;
   onItemDelete?: (item: Item) => void;
+  emptyLabel?: string;
 }) {
   if (items.length === 0) {
     return (
       <View style={{ paddingVertical: 40, alignItems: 'center' }}>
-        <Text style={{ fontFamily: 'Inter_300Light', fontSize: 13, color: '#7A7762' }}>No items yet</Text>
+        <Text style={{ fontFamily: 'Inter_300Light', fontSize: 13, color: '#7A7762' }}>{emptyLabel}</Text>
       </View>
     );
   }
@@ -447,6 +449,7 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
   const { friends } = useFriends();
   const { borrowStats, lendStats } = useBorrows();
   const { findThreadByUser } = useMessages();
+  const { favoritedItems } = useInteractions();
   const fadeOpacity = useFadeOnFocus();
 
   // Own profile data
@@ -869,6 +872,21 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
 
           {/* Visibility legend — own profile only */}
           {isOwnProfile && <VisibilityLegend />}
+
+          {/* Favorites — items I've hearted that belong to other people; own profile only */}
+          {isOwnProfile && (() => {
+            const othersFavorited = favoritedItems.filter((i) => i.owner_id !== user?.id);
+            return (
+              <>
+                <ClosetHeader title="Favorites" count={othersFavorited.length} />
+                <ClosetGallery
+                  items={othersFavorited}
+                  onItemPress={(item) => navigation.navigate('ItemDetail', { item })}
+                  emptyLabel="No favorites yet"
+                />
+              </>
+            );
+          })()}
 
           {/* Message CTA — visitor only */}
           {!isOwnProfile && (
