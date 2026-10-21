@@ -207,6 +207,18 @@ describe('comments', () => {
       { id: 'c2', itemId: 'i1', authorId: 'u1', authorName: 'Me', text: 'love it', createdAt: '2026-01-02' },
     ]);
   });
+
+  it('addComment passes a parentCommentId through when replying', async () => {
+    mockAddComment.mockResolvedValue(
+      { id: 'r1', itemId: 'i1', authorId: 'u1', authorName: 'Me', text: 'thanks!', createdAt: '2026-01-02', parentCommentId: 'top1' },
+    );
+    await renderProvider();
+
+    await act(async () => { await ctx.addComment('i1', 'thanks!', 'top1'); });
+
+    expect(mockAddComment).toHaveBeenCalledWith('i1', 'u1', 'thanks!', 'top1');
+    expect(ctx.getComments('i1')[0].parentCommentId).toBe('top1');
+  });
 });
 
 describe('useInteractions', () => {

@@ -19,6 +19,11 @@ jest.mock('../../context/InteractionsContext', () => ({
   }),
 }));
 
+const mockNavigate = jest.fn();
+jest.mock('@react-navigation/native', () => ({
+  useNavigation: () => ({ navigate: mockNavigate }),
+}));
+
 import ItemCard from '../../components/ItemCard';
 import type { Item } from '../../types';
 
@@ -38,6 +43,7 @@ const makeItem = (overrides: Partial<Item> = {}): Item => ({
 describe('ItemCard', () => {
   beforeEach(() => {
     mockToggleFavorite.mockClear();
+    mockNavigate.mockClear();
     mockFavoritedIds = new Set();
   });
 
@@ -108,6 +114,7 @@ describe('ItemCard', () => {
 describe('ItemCard favoriting', () => {
   beforeEach(() => {
     mockToggleFavorite.mockClear();
+    mockNavigate.mockClear();
     mockFavoritedIds = new Set();
   });
 
@@ -144,5 +151,39 @@ describe('ItemCard favoriting', () => {
     );
     const icons = UNSAFE_queryAllByType(require('@expo/vector-icons').Ionicons);
     expect(icons.some((n: any) => n.props.name === 'heart-outline' || n.props.name === 'heart')).toBe(false);
+  });
+});
+
+describe('ItemCard comments', () => {
+  beforeEach(() => {
+    mockToggleFavorite.mockClear();
+    mockNavigate.mockClear();
+    mockFavoritedIds = new Set();
+  });
+
+  it('renders a comment icon', () => {
+    const { UNSAFE_getAllByType } = render(<ItemCard item={makeItem({ id: '1' })} onPress={jest.fn()} />);
+    const icons = UNSAFE_getAllByType(require('@expo/vector-icons').Ionicons);
+    expect(icons.some((n: any) => n.props.name === 'chatbubble-outline')).toBe(true);
+  });
+
+  it('navigates to ItemComments with the item, and not onPress, when tapped', () => {
+    const onPress = jest.fn();
+    const item = makeItem({ id: '1' });
+    render(<ItemCard item={item} onPress={onPress} />);
+
+    fireEvent.press(screen.getByText('chatbubble-outline'), { stopPropagation: jest.fn() });
+
+    expect(mockNavigate).toHaveBeenCalledWith('ItemComments', { item });
+    expect(onPress).not.toHaveBeenCalled();
+    expect(mockToggleFavorite).not.toHaveBeenCalled();
+  });
+
+  it('does not render a comment button when onEdit is provided (owner view)', () => {
+    const { UNSAFE_queryAllByType } = render(
+      <ItemCard item={makeItem({ id: '1' })} onPress={jest.fn()} onEdit={jest.fn()} />,
+    );
+    const icons = UNSAFE_queryAllByType(require('@expo/vector-icons').Ionicons);
+    expect(icons.some((n: any) => n.props.name === 'chatbubble-outline')).toBe(false);
   });
 });

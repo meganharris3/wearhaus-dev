@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { Comment } from '../types';
 
-const COMMENT_SELECT = 'id, item_id, author_id, text, created_at, author:users(display_name)';
+const COMMENT_SELECT = 'id, item_id, author_id, text, created_at, parent_comment_id, author:users(display_name)';
 
 function toComment(row: any): Comment {
   return {
@@ -11,6 +11,7 @@ function toComment(row: any): Comment {
     authorName: row.author?.display_name ?? 'User',
     text: row.text,
     createdAt: row.created_at,
+    parentCommentId: row.parent_comment_id ?? undefined,
   };
 }
 
@@ -43,10 +44,20 @@ export async function fetchComments(itemId: string, opts: { limit?: number } = {
   return (data ?? []).reverse().map(toComment);
 }
 
-export async function addComment(itemId: string, authorId: string, text: string): Promise<Comment> {
+/**
+ * Posts a comment, or — when `parentCommentId` is given — a reply to a top-level comment.
+ * The app only ever passes a top-level comment's id here, never another reply's; see
+ * src/utils/commentThreads.ts for how a thread is rendered.
+ */
+export async function addComment(
+  itemId: string,
+  authorId: string,
+  text: string,
+  parentCommentId?: string,
+): Promise<Comment> {
   const { data, error } = await supabase
     .from('item_comments')
-    .insert({ item_id: itemId, author_id: authorId, text })
+    .insert({ item_id: itemId, author_id: authorId, text, parent_comment_id: parentCommentId ?? undefined })
     .select(COMMENT_SELECT)
     .single();
 

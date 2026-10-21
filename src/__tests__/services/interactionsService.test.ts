@@ -128,6 +128,18 @@ describe('fetchComments', () => {
     expect((await fetchComments('i1'))[0].authorName).toBe('User');
   });
 
+  it('maps parent_comment_id to parentCommentId for a reply', async () => {
+    mockFrom.mockReturnValue(makeChain({
+      data: [{ ...row('r1', '2026-01-01'), parent_comment_id: 'top1' }], error: null,
+    }));
+    expect((await fetchComments('i1'))[0].parentCommentId).toBe('top1');
+  });
+
+  it('leaves parentCommentId undefined for a top-level comment', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: [row('c1', '2026-01-01')], error: null }));
+    expect((await fetchComments('i1'))[0].parentCommentId).toBeUndefined();
+  });
+
   it('returns empty array when data is null', async () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
     expect(await fetchComments('i1')).toEqual([]);
@@ -159,7 +171,21 @@ describe('addComment', () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'RLS violation' } }));
     await expect(addComment('i1', 'u1', 'x')).rejects.toThrow('RLS violation');
   });
+
+  it('inserts a reply with parent_comment_id set when replying to a comment', async () => {
+    const chain = makeChain({
+      data: { id: 'r1', item_id: 'i1', author_id: 'u1', text: 'Thanks!', created_at: '2026-01-01', parent_comment_id: 'top1', author: { display_name: 'Maya Chen' } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(chain);
+
+    const result = await addComment('i1', 'u1', 'Thanks!', 'top1');
+
+    expect(chain.insert).toHaveBeenCalledWith({ item_id: 'i1', author_id: 'u1', text: 'Thanks!', parent_comment_id: 'top1' });
+    expect(result.parentCommentId).toBe('top1');
+  });
 });
+
 
 describe('fetchItemIdsWithFavorites', () => {
   it('returns an empty set without querying when given no item ids', async () => {

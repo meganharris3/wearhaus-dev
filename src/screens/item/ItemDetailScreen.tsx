@@ -22,40 +22,14 @@ import StatusTag from '../../components/StatusTag';
 import { useAuth } from '../../context/AuthContext';
 import { useInteractions } from '../../context/InteractionsContext';
 import { useMessages } from '../../context/MessagesContext';
+import CommentThread from '../../components/CommentThread';
 import type { ThreadParticipant } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
-import type { Comment } from '../../types';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'ItemDetail'>;
 
 function getInitials(name: string): string {
   return name.split(' ').map((n) => n.charAt(0).toUpperCase()).join('').slice(0, 2);
-}
-
-function timeAgo(iso: string): string {
-  const diff = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diff < 60)   return 'just now';
-  if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
-  return `${Math.floor(diff / 86400)}d ago`;
-}
-
-function CommentRow({ comment }: { comment: Comment }) {
-  const initials = getInitials(comment.authorName);
-  return (
-    <View style={commentStyles.row}>
-      <View style={commentStyles.avatar}>
-        <Text style={commentStyles.avatarText}>{initials}</Text>
-      </View>
-      <View style={commentStyles.bubble}>
-        <View style={commentStyles.bubbleHeader}>
-          <Text style={commentStyles.authorName}>{comment.authorName}</Text>
-          <Text style={commentStyles.timestamp}>{timeAgo(comment.createdAt)}</Text>
-        </View>
-        <Text style={commentStyles.commentText}>{comment.text}</Text>
-      </View>
-    </View>
-  );
 }
 
 export default function ItemDetailScreen({ route }: Props) {
@@ -106,6 +80,11 @@ export default function ItemDetailScreen({ route }: Props) {
       Alert.alert('Could not post comment', e instanceof Error ? e.message : 'Please try again.');
     }
   }, [commentText, item.id, addComment]);
+
+  const handleReply = useCallback(
+    (parentCommentId: string, text: string) => addComment(item.id, text, parentCommentId),
+    [item.id, addComment],
+  );
 
   return (
     <KeyboardAvoidingView style={styles.root} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
@@ -261,11 +240,7 @@ export default function ItemDetailScreen({ route }: Props) {
             COMMENTS{comments.length > 0 ? ` · ${comments.length}` : ''}
           </Text>
 
-          {comments.length === 0 && (
-            <Text style={styles.noComments}>No comments yet. Be the first!</Text>
-          )}
-
-          {comments.map((c) => <CommentRow key={c.id} comment={c} />)}
+          <CommentThread comments={comments} onReply={handleReply} />
 
         </View>
 
@@ -430,8 +405,6 @@ const styles = StyleSheet.create({
   lenderName: { fontFamily: theme.fonts.interSemiBold, fontSize: 13, color: theme.colors.ink },
   lenderRating: { fontFamily: theme.fonts.interRegular, fontSize: 12, color: theme.colors.muted, marginTop: 1 },
 
-  noComments: { fontFamily: theme.fonts.interLight, fontSize: 13, color: theme.colors.muted, marginBottom: 16 },
-
   commentInputRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     borderWidth: 1.5, borderColor: theme.colors.ivoryMid,
@@ -490,21 +463,4 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 14,
     color: theme.colors.ivory, textTransform: 'uppercase', letterSpacing: 1,
   },
-});
-
-const commentStyles = StyleSheet.create({
-  row: { flexDirection: 'row', gap: 10, marginBottom: 14, alignItems: 'flex-start' },
-  avatar: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: theme.colors.ivoryDark,
-    borderWidth: 1, borderColor: theme.colors.ivoryMid,
-    alignItems: 'center', justifyContent: 'center',
-    flexShrink: 0,
-  },
-  avatarText: { fontFamily: theme.fonts.interSemiBold, fontSize: 10, color: theme.colors.ink },
-  bubble: { flex: 1 },
-  bubbleHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 6, marginBottom: 3 },
-  authorName: { fontFamily: theme.fonts.interSemiBold, fontSize: 12, color: theme.colors.ink },
-  timestamp:  { fontFamily: theme.fonts.interLight, fontSize: 10, color: theme.colors.muted },
-  commentText: { fontFamily: theme.fonts.interRegular, fontSize: 13, color: theme.colors.ink, lineHeight: 18 },
 });

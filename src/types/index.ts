@@ -63,6 +63,8 @@ export interface Comment {
   authorName: string;
   text: string;
   createdAt: string;
+  /** The top-level comment this replies to; undefined/null for a top-level comment itself. */
+  parentCommentId?: string | null;
 }
 
 export interface Friend {

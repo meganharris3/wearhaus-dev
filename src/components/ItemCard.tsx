@@ -1,9 +1,12 @@
 import React from 'react';
 import { View, Text, Image, Pressable, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import { useNavigation } from '@react-navigation/native';
+import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../theme';
 import StatusTag from './StatusTag';
 import { useInteractions } from '../context/InteractionsContext';
+import type { AppStackParamList } from '../navigation/AppStack';
 import type { Item, VisibilityMode } from '../types';
 
 const VIS_CONFIG: Record<VisibilityMode, {
@@ -37,7 +40,13 @@ interface ItemCardProps {
 function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
   const priceFormatted = `$${(item.price_per_day / 100).toFixed(2)}/day`;
   const { isFavorited, toggleFavorite } = useInteractions();
+  const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const liked = isFavorited(item.id);
+
+  function openComments(e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    navigation.navigate('ItemComments', { item });
+  }
 
   return (
     <Pressable onPress={onPress} style={styles.card}>
@@ -85,17 +94,22 @@ function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
             <Text style={styles.location} numberOfLines={1}>{item.location_label}</Text>
           </View>
           {!onEdit && (
-            <Pressable
-              onPress={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
-              style={styles.heartBtn}
-              hitSlop={6}
-            >
-              <Ionicons
-                name={liked ? 'heart' : 'heart-outline'}
-                size={18}
-                color={liked ? '#E8524A' : theme.colors.muted}
-              />
-            </Pressable>
+            <View style={styles.actionsCol}>
+              <Pressable
+                onPress={(e) => { e.stopPropagation(); toggleFavorite(item.id); }}
+                style={styles.heartBtn}
+                hitSlop={6}
+              >
+                <Ionicons
+                  name={liked ? 'heart' : 'heart-outline'}
+                  size={18}
+                  color={liked ? '#E8524A' : theme.colors.muted}
+                />
+              </Pressable>
+              <Pressable onPress={openComments} style={styles.commentBtn} hitSlop={6}>
+                <Ionicons name="chatbubble-outline" size={17} color={theme.colors.muted} />
+              </Pressable>
+            </View>
           )}
         </View>
       </View>
@@ -163,7 +177,17 @@ const styles = StyleSheet.create({
     alignItems: 'flex-end',
     gap: 4,
   },
+  actionsCol: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
   heartBtn: {
+    paddingBottom: 1,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  commentBtn: {
     paddingBottom: 1,
     alignItems: 'center',
     justifyContent: 'flex-end',

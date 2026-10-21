@@ -1,6 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import AppTabs from './AppTabs';
 import ItemDetailScreen from '../screens/item/ItemDetailScreen';
+import ItemCommentsScreen from '../screens/item/ItemCommentsScreen';
 import AvailabilityScreen from '../screens/item/AvailabilityScreen';
 import DatePickerScreen from '../screens/item/DatePickerScreen';
 import AddItemScreen from '../screens/closet/AddItemScreen';
@@ -36,6 +37,7 @@ import type { Item, Haus } from '../types';
 export type AppStackParamList = {
   Tabs: undefined;
   ItemDetail: { item: Item };
+  ItemComments: { item: Item };
   Availability: { item: Item };
   DatePicker: { item: Item };
   AddItem: { item?: Item } | undefined;
@@ -77,6 +79,7 @@ export default function AppStack() {
         <Stack.Navigator screenOptions={{ headerShown: false, animation: 'fade' }}>
           <Stack.Screen name="Tabs"             component={AppTabs} />
           <Stack.Screen name="ItemDetail"       component={ItemDetailScreen} />
+          <Stack.Screen name="ItemComments"     component={ItemCommentsScreen} options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="Availability"     component={AvailabilityScreen} />
           <Stack.Screen name="DatePicker"       component={DatePickerScreen} />
           <Stack.Screen name="AddItem"          component={AddItemScreen} />

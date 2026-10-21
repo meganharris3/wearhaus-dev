@@ -20,7 +20,8 @@ interface InteractionsContextValue {
   getComments: (itemId: string) => Comment[];
   /** Fetches the latest comments for an item into the cache (call when its detail opens). */
   loadComments: (itemId: string) => Promise<void>;
-  addComment: (itemId: string, text: string) => Promise<void>;
+  /** Posts a comment, or — when `parentCommentId` is given — a reply to a top-level comment. */
+  addComment: (itemId: string, text: string, parentCommentId?: string) => Promise<void>;
 }
 
 const InteractionsContext = createContext<InteractionsContextValue | null>(null);
@@ -97,10 +98,14 @@ export function InteractionsProvider({ children }: { children: React.ReactNode }
     setCommentsByItem((prev) => ({ ...prev, [itemId]: comments }));
   }, []);
 
-  const addComment = useCallback(async (itemId: string, text: string) => {
+  const addComment = useCallback(async (itemId: string, text: string, parentCommentId?: string) => {
     const trimmed = text.trim();
     if (!userId || !trimmed) return;
-    const created = await addCommentRemote(itemId, userId, trimmed);
+    // Only pass a 4th argument when actually replying, so a plain top-level post keeps the
+    // exact same call shape it always had.
+    const created = parentCommentId
+      ? await addCommentRemote(itemId, userId, trimmed, parentCommentId)
+      : await addCommentRemote(itemId, userId, trimmed);
     setCommentsByItem((prev) => ({ ...prev, [itemId]: [...(prev[itemId] ?? []), created] }));
   }, [userId]);
 
