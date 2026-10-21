@@ -10,6 +10,11 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     storage: AsyncStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
+    // Confirmation/magic-link/OAuth redirects land back on the app with the session in the URL
+    // (e.g. #access_token=...&type=signup on web). With this off, that token was silently
+    // ignored — Supabase's own redirect worked, but the app never read what it was handed, so
+    // the page just sat there looking stuck. supabase-js only acts on this in an actual browser
+    // (gated internally by its own isBrowser() check), so leaving it on is a no-op on native.
+    detectSessionInUrl: true,
   },
 });
