@@ -1,6 +1,7 @@
 import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from '../theme';
 import HomeScreen from '../screens/home/HomeScreen';
 import ExploreScreen from '../screens/home/ExploreScreen';
@@ -27,6 +28,10 @@ const ICONS: Record<string, [IconName, IconName]> = {
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 export default function AppTabs() {
+  // On an installed PWA there's no browser chrome, so the iPhone home indicator sits right
+  // where the tab bar would otherwise end — pad past it instead of letting content hide under it.
+  const insets = useSafeAreaInsets();
+
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
@@ -36,7 +41,7 @@ export default function AppTabs() {
           borderTopColor: theme.colors.ivoryMid,
           borderTopWidth: 1.5,
           height: 88,
-          paddingBottom: 28,
+          paddingBottom: Math.max(insets.bottom, 14),
           paddingTop: 8,
         },
         tabBarLabelStyle: {

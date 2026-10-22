@@ -11,7 +11,7 @@ import {
   Animated,
 } from 'react-native';
 import { useFadeOnFocus } from '../../hooks/useFadeOnFocus';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackScreenProps } from '@react-navigation/native-stack';
@@ -30,6 +30,7 @@ import ItemCard from '../../components/ItemCard';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Item } from '../../types';
 import { buildProfileUpdates } from '../../utils/profileUpdates';
+import { useInstallPrompt } from '../../context/InstallPromptContext';
 
 
 function getInitials(name: string): string {
@@ -372,6 +373,7 @@ function ClosetGallery({ items, onItemPress, onItemEdit, onItemDelete, emptyLabe
 
 function SettingsButton({ onLogOut, onFriends }: { onLogOut: () => void; onFriends: () => void }) {
   const [open, setOpen] = useState(false);
+  const install = useInstallPrompt();
 
   const menuItems = [
     { icon: 'person-outline'        as const, label: 'Edit Profile',       danger: false, onPress: () => Alert.alert('Edit Profile', 'Coming soon') },
@@ -379,6 +381,9 @@ function SettingsButton({ onLogOut, onFriends }: { onLogOut: () => void; onFrien
     { icon: 'card-outline'          as const, label: 'Payment Methods',    danger: false, onPress: () => Alert.alert('Payment Methods', 'Coming soon') },
 { icon: 'people-outline'        as const, label: 'Friends',            danger: false, onPress: onFriends },
     { icon: 'lock-closed-outline'   as const, label: 'Privacy',            danger: false, onPress: () => Alert.alert('Privacy', 'Coming soon') },
+    ...(install.showInstallRow
+      ? [{ icon: 'download-outline' as const, label: 'Install App', danger: false, onPress: () => install.open('settings') }]
+      : []),
     { icon: 'log-out-outline'       as const, label: 'Log Out',            danger: true,  onPress: onLogOut },
   ];
 
@@ -443,6 +448,7 @@ function SettingsButton({ onLogOut, onFriends }: { onLogOut: () => void; onFrien
 
 function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; userId?: string }) {
   const navigation = useNavigation<any>();
+  const insets = useSafeAreaInsets();
   const { user, profile, signOut, updateProfile } = useAuth();
   const { items, deleteItem } = useCloset();
   const { hauses } = useHauses();
@@ -915,7 +921,7 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
           onPress={() => navigation.navigate('AddItem')}
           hitSlop={4}
           style={{
-            position: 'absolute', bottom: 24, right: 20,
+            position: 'absolute', bottom: 24 + insets.bottom, right: 20,
             flexDirection: 'row', alignItems: 'center', gap: 4,
             paddingVertical: 12, paddingHorizontal: 18,
             backgroundColor: '#FFFFAD',

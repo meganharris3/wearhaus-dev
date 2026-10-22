@@ -8,7 +8,7 @@ import {
   Animated,
   ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp, CompositeNavigationProp } from '@react-navigation/native';
 import { useFadeOnFocus } from '../../hooks/useFadeOnFocus';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -33,6 +33,7 @@ type HomeNavProp = CompositeNavigationProp<
 
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNavProp>();
+  const insets = useSafeAreaInsets();
   const { user, profile } = useAuth();
   const { friends } = useFriends();
   const { hauses } = useHauses();
@@ -156,7 +157,7 @@ export default function HomeScreen() {
 
       {/* FAB — add item to closet */}
       <Pressable
-        style={styles.fab}
+        style={[styles.fab, { bottom: 24 + insets.bottom }]}
         onPress={() => navigation.navigate('AddItem')}
         hitSlop={4}
       >
@@ -251,10 +252,9 @@ const styles = StyleSheet.create({
   campusStripTitle: { fontFamily: theme.fonts.interSemiBold, fontSize: 11, color: theme.colors.ink },
   campusStripSub: { fontFamily: theme.fonts.interLight, fontSize: 9, color: theme.colors.muted },
 
-  // FAB
+  // FAB — bottom offset is set inline (base 24 + the safe-area inset)
   fab: {
     position: 'absolute',
-    bottom: 24,
     right: 20,
     flexDirection: 'row',
     alignItems: 'center',

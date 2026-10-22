@@ -3,26 +3,19 @@
   <head>
     <meta charset="utf-8" />
     <meta httpEquiv="X-UA-Compatible" content="IE=edge" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no, viewport-fit=cover" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <title>%WEB_TITLE%</title>
 
-    <!-- Icons -->
-    <link rel="icon" type="image/png" href="/favicon.png" />
-    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
-
-    <!-- Web app manifest (Android "Add to Home Screen", Chrome install prompt) -->
-    <link rel="manifest" href="/manifest.json" />
-
-    <!-- Browser UI / status bar tint -->
-    <meta name="theme-color" content="#14120C" />
-
-    <!-- iOS "Add to Home Screen": launch standalone (no Safari chrome), with the dark hero
-         headers already used throughout the app drawing under the translucent status bar —
-         matches how the same screens already look on native iOS via SafeAreaView. -->
-    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <!-- PWA manifest + icons -->
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <meta name="theme-color" content="#FDFBF4" />
+    <meta name="application-name" content="Wearhaus" />
     <meta name="mobile-web-app-capable" content="yes" />
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Wearhaus" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon-180.png" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/icons/favicon-32.png" />
 
     <!-- The `react-native-web` recommended style reset: https://necolas.github.io/react-native-web/docs/setup/#root-element -->
     <style id="expo-reset">

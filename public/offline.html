@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Wearhaus — Offline</title>
+    <style>
+      html, body {
+        height: 100%;
+        margin: 0;
+        background: #FDFBF4;
+      }
+      body {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 14px;
+        padding: 24px;
+        box-sizing: border-box;
+        text-align: center;
+        font-family: -apple-system, 'Helvetica Neue', Arial, sans-serif;
+      }
+      h1 {
+        margin: 0;
+        font-weight: 800;
+        font-size: 22px;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: #14120C;
+      }
+      p {
+        margin: 0;
+        max-width: 280px;
+        font-size: 14px;
+        line-height: 1.4;
+        color: #7A7762;
+      }
+      button {
+        margin-top: 8px;
+        padding: 12px 28px;
+        border: none;
+        border-radius: 2px;
+        background: #14120C;
+        color: #FDFBF4;
+        font-weight: 800;
+        font-size: 12px;
+        letter-spacing: 1.4px;
+        text-transform: uppercase;
+        cursor: pointer;
+      }
+      button:active {
+        opacity: 0.8;
+      }
+    </style>
+  </head>
+  <body>
+    <h1>Wearhaus</h1>
+    <p>You're offline. Reconnect to browse closets.</p>
+    <button onclick="location.reload()">Try again</button>
+  </body>
+</html>

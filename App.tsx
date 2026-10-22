@@ -7,9 +7,12 @@ import { Inter_300Light, Inter_400Regular, Inter_600SemiBold } from '@expo-googl
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
+import { InstallPromptProvider } from './src/context/InstallPromptContext';
+import { registerServiceWorker } from './src/lib/registerServiceWorker';
 import './src/lib/webAlert'; // makes Alert.alert work on web (React Native Web's is a no-op)
 
 SplashScreen.preventAutoHideAsync();
+registerServiceWorker(); // web + production only — see the function for the full gate
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({
@@ -35,7 +38,9 @@ export default function App() {
       <View style={styles.root} onLayout={onLayoutRootView}>
         <StatusBar style="dark" backgroundColor="#FDFBF4" />
         <AuthProvider>
-          <RootNavigator />
+          <InstallPromptProvider>
+            <RootNavigator />
+          </InstallPromptProvider>
         </AuthProvider>
       </View>
     </SafeAreaProvider>

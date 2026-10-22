@@ -76,6 +76,14 @@ jest.mock('expo-image-picker', () => ({
 }));
 jest.mock('../../services/storageService', () => ({ uploadAvatar: jest.fn() }));
 
+jest.mock('../../context/InstallPromptContext', () => ({
+  useInstallPrompt: () => ({
+    isOpen: false, open: jest.fn(), close: jest.fn(), maybeAutoShow: jest.fn(),
+    canNativeInstall: false, promptNativeInstall: jest.fn(),
+    showInstallRow: false, snooze: jest.fn(), acknowledge: jest.fn(),
+  }),
+}));
+
 import ProfileScreen from '../../screens/profile/ProfileScreen';
 
 // ---------------------------------------------------------------------------
