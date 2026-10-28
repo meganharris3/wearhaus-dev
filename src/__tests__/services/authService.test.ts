@@ -98,6 +98,23 @@ describe('signUp', () => {
     });
   });
 
+  it('replaces the "{}" message @supabase/auth-js produces for a collapsed 5xx error with something readable', async () => {
+    // auth-js's handleError() treats any 5xx (including a real "Error sending confirmation
+    // email" failure) as a retryable infra error and discards the parsed response body,
+    // building the message from JSON.stringify(rawResponse) instead — which serializes to the
+    // literal string "{}" since Response has no enumerable own properties. Confirmed against
+    // the real SDK: a live signUp() hitting a 500 came back with error.message === '{}'.
+    mockSignUp.mockResolvedValueOnce({
+      data: { user: null, session: null },
+      error: { message: '{}' },
+    });
+
+    const result = await signUp('user@test.com', 'secret', 'Test User');
+
+    expect(result.error?.message).not.toBe('{}');
+    expect(result.error?.message).toBeTruthy();
+  });
+
   it('passes displayName in options.data', async () => {
     mockSignUp.mockResolvedValueOnce({
       data: { user: { id: 'u1', identities: [{ id: 'i1' }] }, session: { access_token: 'tok' } },
@@ -136,6 +153,15 @@ describe('signIn', () => {
     const result = await signIn('user@test.com', 'wrong');
 
     expect(result.error).toEqual({ message: 'Invalid login credentials' });
+  });
+
+  it('replaces a collapsed "{}" 5xx message with something readable', async () => {
+    mockSignInWithPassword.mockResolvedValueOnce({ error: { message: '{}' } });
+
+    const result = await signIn('user@test.com', 'secret');
+
+    expect(result.error?.message).not.toBe('{}');
+    expect(result.error?.message).toBeTruthy();
   });
 });
 

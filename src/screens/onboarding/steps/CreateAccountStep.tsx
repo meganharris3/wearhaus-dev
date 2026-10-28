@@ -15,6 +15,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../../theme';
 import { useAuth } from '../../../context/AuthContext';
 import { supabase } from '../../../lib/supabase';
+import { friendlyAuthErrorMessage } from '../../../services/authService';
 
 interface CreateAccountStepProps {
   onNext: () => void;
@@ -94,7 +95,7 @@ export default function CreateAccountStep({
     const { error } = await supabase.auth.resend({ type: 'signup', email });
     setResending(false);
     if (error) {
-      setResendError(error.message);
+      setResendError(friendlyAuthErrorMessage(error.message));
     } else {
       setResendCooldown(60);
     }

@@ -4,6 +4,20 @@ export interface AuthError {
   message: string;
 }
 
+/**
+ * @supabase/auth-js's handleError() treats any 5xx response (including a genuine
+ * "Error sending confirmation email" failure) as a retryable infra error and discards the
+ * parsed response body — it builds the message from JSON.stringify(rawResponse) instead,
+ * which serializes to the literal string "{}" since a fetch Response has no enumerable own
+ * properties. Without this, a real backend failure renders as a bare "{}" in the UI.
+ */
+export function friendlyAuthErrorMessage(message: string | undefined | null): string {
+  if (!message || message === '{}') {
+    return 'Something went wrong on our end. Please try again in a moment.';
+  }
+  return message;
+}
+
 export interface SignUpResult {
   error: AuthError | null;
   /**
@@ -32,7 +46,7 @@ export async function signUp(
     options: { data: { display_name: displayName } },
   });
   return {
-    error: error ? { message: error.message } : null,
+    error: error ? { message: friendlyAuthErrorMessage(error.message) } : null,
     needsEmailConfirmation: !error && !data?.session,
     mayAlreadyHaveAccount: !error && Array.isArray(data?.user?.identities) && data.user!.identities!.length === 0,
   };
@@ -43,7 +57,7 @@ export async function signIn(
   password: string,
 ): Promise<{ error: AuthError | null }> {
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  return { error: error ? { message: error.message } : null };
+  return { error: error ? { message: friendlyAuthErrorMessage(error.message) } : null };
 }
 
 export async function signOut(): Promise<void> {
