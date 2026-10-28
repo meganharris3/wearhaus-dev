@@ -20,7 +20,8 @@ supabase/
 │   ├── 011_add_haus_collections.sql              # haus_collections, haus_collection_items
 │   ├── 012_add_boards.sql                        # boards, board_items
 │   ├── 013_add_messages.sql                      # threads, messages, read tracking
-│   └── 014_add_interactions_and_notifications.sql # favorites, comments, notifications + triggers
+│   ├── 014_add_interactions_and_notifications.sql # favorites, comments, notifications + triggers
+│   └── 015_add_campus_otp.sql                     # campus_otp_verifications, send/verify RPCs
 ├── seed.sql                         # Test data (dev/preview only)
 ├── monitoring.sql                   # Health check views
 └── README.md                        # This file
@@ -46,14 +47,19 @@ cat supabase/migrations/001_initial_schema.sql | pbcopy
 cat supabase/migrations/002_security_fixes.sql | pbcopy
 # Paste in SQL Editor, run
 
-# Steps 3-14: repeat for 003 ... 014, strictly in numeric order
+# Steps 3-15: repeat for 003 ... 015, strictly in numeric order
 
 # Last: run seed (optional, dev only — after ALL migrations)
 cat supabase/seed.sql | pbcopy
 # Paste in SQL Editor, run
 ```
 
-Apply migrations **in numeric order** — later files depend on earlier ones (e.g. 013 references `items`, 014 references `friendships` and `messages`). Migrations 010–014 only add objects or repair data; none drops or alters an existing column.
+Apply migrations **in numeric order** — later files depend on earlier ones (e.g. 013 references `items`, 014 references `friendships` and `messages`). Migrations 010–015 only add objects or repair data; none drops or alters an existing column.
+
+Migration 015 also needs a secret set once per project, in the SQL Editor (never commit the real key to a migration file):
+```sql
+select vault.create_secret('<your resend api key>', 'resend_api_key');
+```
 
 ### 3. Run Monitoring Setup
 ```bash
