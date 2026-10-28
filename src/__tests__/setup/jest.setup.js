@@ -1,3 +1,10 @@
+// Expo CLI's own dotenv loading (.env.local, etc.) only runs under `expo start`/`expo export`,
+// not under babel-jest — so src/lib/supabase.ts's process.env.EXPO_PUBLIC_SUPABASE_* reads would
+// otherwise be undefined here. Deterministic test-only values so the client config always
+// constructs with real strings, regardless of what's in any local .env file.
+process.env.EXPO_PUBLIC_SUPABASE_URL ??= 'https://test-project.supabase.co';
+process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ??= 'test-anon-key';
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () =>
   require('@react-native-async-storage/async-storage/jest/async-storage-mock')

@@ -2,8 +2,10 @@ import 'react-native-url-polyfill/auto';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = 'https://pdjqasshilipyujnsrkw.supabase.co';
-const supabaseAnonKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBkanFhc3NoaWxpcHl1am5zcmt3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4MTM2NDcsImV4cCI6MjA5NzM4OTY0N30.vJvBMns7iCrPDHM6YloZD1t4r1rgEZ5xZEV_uxeEd6I';
+// Must stay static `process.env.EXPO_PUBLIC_*` member accesses — that is the only form Expo's
+// babel plugin inlines. .env.local / .env.development / .env.production select which project.
+const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL!;
+const supabaseAnonKey = process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY!;
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
