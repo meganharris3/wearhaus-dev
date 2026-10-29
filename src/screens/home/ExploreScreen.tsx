@@ -9,7 +9,7 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp, CompositeNavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, RouteProp, NavigationProp, CompositeNavigationProp } from '@react-navigation/native';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
@@ -21,16 +21,18 @@ import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
 import { getVisibleItems } from '../../utils/visibilityFilter';
 import { fetchFeedItems, searchItems } from '../../services/itemService';
+import { fetchCampusHaus, fetchAllHausMembers } from '../../services/hausService';
 import type { Item } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AppTabsParamList } from '../../navigation/AppTabs';
 
-type AudienceFilter = 'all' | 'friends' | 'hauses';
+type AudienceFilter = 'all' | 'friends' | 'hauses' | 'campus';
 
 type ExploreNavProp = CompositeNavigationProp<
   BottomTabNavigationProp<AppTabsParamList, 'Explore'>,
   NavigationProp<AppStackParamList>
 >;
+type ExploreRouteProp = RouteProp<AppTabsParamList, 'Explore'>;
 
 type FilterKey = 'size' | 'color' | 'style' | 'price';
 
@@ -173,17 +175,32 @@ function FilterDropdown({ filterKey, selectedValues, onToggle, onClear, onClose 
 
 export default function ExploreScreen() {
   const navigation = useNavigation<ExploreNavProp>();
-  const { user } = useAuth();
+  const route = useRoute<ExploreRouteProp>();
+  const { user, profile } = useAuth();
   const { friends } = useFriends();
   const { hauses } = useHauses();
   const [searchQuery, setSearchQuery] = useState('');
-  const [audience, setAudience]       = useState<AudienceFilter>('all');
+  const [audience, setAudience]       = useState<AudienceFilter>(route.params?.campusId ? 'campus' : 'all');
   const [activeFilter, setActiveFilter] = useState<FilterKey | null>(null);
   const [filters, setFilters] = useState<Record<FilterKey, string[]>>({
     size: [], color: [], style: [], price: [],
   });
   const [feedItems, setFeedItems]     = useState<Item[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [campusMemberIds, setCampusMemberIds] = useState<Set<string>>(new Set());
+
+  // A tap on Home's campus banner lands here with ?campusId — but the member set is keyed off
+  // the viewer's own campus (profile.campus_id) so the Campus pill still works on a manual toggle,
+  // not just on arrival from the banner.
+  useEffect(() => {
+    if (!profile?.campus_id) return;
+    let cancelled = false;
+    fetchCampusHaus(profile.campus_id)
+      .then((haus) => (haus ? fetchAllHausMembers(haus.id) : []))
+      .then((members) => { if (!cancelled) setCampusMemberIds(new Set(members.map((m) => m.userId))); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [profile?.campus_id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -237,6 +254,8 @@ export default function ExploreScreen() {
           ([id, on]) => on && hausIds.has(id),
         ),
       );
+    } else if (audience === 'campus') {
+      items = items.filter((i) => campusMemberIds.has(i.owner_id));
     }
 
     if (filters.size.length > 0) {
@@ -299,7 +318,7 @@ export default function ExploreScreen() {
     }
 
     return items;
-  }, [feedItems, audience, user?.id, friends, hauses, friendIds, hausIds, filters]);
+  }, [feedItems, audience, user?.id, friends, hauses, friendIds, hausIds, campusMemberIds, filters]);
 
   const handleItemPress = useCallback(
     (item: Item) => navigation.navigate('ItemDetail', { item }),
@@ -336,6 +355,9 @@ export default function ExploreScreen() {
                 { label: 'All',     value: 'all'     },
                 { label: 'Friends', value: 'friends' },
                 { label: 'Hauses',  value: 'hauses'  },
+                ...(profile?.campus_verified
+                  ? [{ label: profile.campus_name ?? 'Campus', value: 'campus' as const }]
+                  : []),
               ] as { label: string; value: AudienceFilter }[]).map(({ label, value }) => (
                 <Pressable key={value} onPress={() => setAudience(value)} style={[styles.pill, audience === value && styles.pillActive]}>
                   <Text style={[styles.pillText, audience === value && styles.pillTextActive]}>{label.toUpperCase()}</Text>

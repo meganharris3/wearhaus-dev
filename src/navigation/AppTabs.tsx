@@ -10,7 +10,7 @@ import ProfileScreen from '../screens/profile/ProfileScreen';
 
 export type AppTabsParamList = {
   Home: undefined;
-  Explore: undefined;
+  Explore: { campusId?: string } | undefined;
   Closet: undefined;
   Profile: undefined;
 };

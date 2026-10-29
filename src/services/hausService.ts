@@ -11,6 +11,20 @@ export async function fetchMyHauses(userId: string): Promise<Haus[]> {
   return (data?.map((r: any) => r.haus).filter(Boolean) ?? []) as Haus[];
 }
 
+/** The system-owned campus closet haus for a given campus, or null if it hasn't been created yet
+ *  (joinCampusCloset in campusService.ts creates it lazily, on a user's first campus join). */
+export async function fetchCampusHaus(campusId: string): Promise<Haus | null> {
+  const { data, error } = await supabase
+    .from('hauses')
+    .select('id, name, description, cover_url, member_count, piece_count')
+    .eq('campus_id', campusId)
+    .eq('haus_type', 'campus')
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return (data as Haus | null) ?? null;
+}
+
 export async function fetchAllHauses(opts: PageOpts = {}): Promise<Haus[]> {
   const [from, to] = pageRange(opts, 50);
   const { data, error } = await supabase

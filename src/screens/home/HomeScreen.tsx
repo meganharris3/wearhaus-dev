@@ -22,7 +22,8 @@ import { useAuth } from '../../context/AuthContext';
 import { getVisibleItems } from '../../utils/visibilityFilter';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { fetchFeedItems } from '../../services/itemService';
-import type { Item } from '../../types';
+import { fetchCampusHaus } from '../../services/hausService';
+import type { Item, Haus } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AppTabsParamList } from '../../navigation/AppTabs';
 
@@ -39,6 +40,8 @@ export default function HomeScreen() {
   const { hauses } = useHauses();
   const [feedItems, setFeedItems] = useState<Item[]>([]);
   const [feedLoading, setFeedLoading] = useState(true);
+  const [campusHaus, setCampusHaus] = useState<Haus | null>(null);
+  const [campusStripActive, setCampusStripActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -48,6 +51,15 @@ export default function HomeScreen() {
       .finally(() => { if (!cancelled) setFeedLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  useEffect(() => {
+    if (!profile?.campus_verified || !profile.campus_id) return;
+    let cancelled = false;
+    fetchCampusHaus(profile.campus_id)
+      .then((haus) => { if (!cancelled) setCampusHaus(haus); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [profile?.campus_verified, profile?.campus_id]);
 
   // After onboarding completes with "Add My First Item", navigate there on first mount.
   useEffect(() => {
@@ -134,13 +146,34 @@ export default function HomeScreen() {
 
             {/* Campus strip */}
             {profile?.campus_verified && (
-              <Pressable style={styles.campusStrip} onPress={() => { /* navigate to campus haus */ }}>
-                <View style={styles.campusBadge}>
-                  <Ionicons name="school-outline" size={14} color={theme.colors.ink} />
-                </View>
-                <View>
-                  <Text style={styles.campusStripTitle}>{profile.campus_name} Closet</Text>
-                  <Text style={styles.campusStripSub}>Tap to explore campus exchange →</Text>
+              <Pressable
+                style={({ pressed }) => [
+                  styles.campusStrip,
+                  (pressed || campusStripActive) && styles.campusStripActive,
+                ]}
+                onPress={() => profile?.campus_id && navigation.navigate('Explore', { campusId: profile.campus_id })}
+                onHoverIn={() => setCampusStripActive(true)}
+                onHoverOut={() => setCampusStripActive(false)}
+                accessibilityRole="button"
+                accessibilityLabel={`${profile.campus_name} Closet, explore the campus exchange`}
+              >
+                <View style={styles.campusStripBorder}>
+                  <View style={styles.campusStripInner}>
+                    <View style={styles.campusIconTile}>
+                      <Ionicons name="school-outline" size={20} color={theme.colors.ink} />
+                    </View>
+                    <View style={styles.campusTextBlock}>
+                      <Text style={styles.campusStripTitle} numberOfLines={1}>{profile.campus_name} Closet</Text>
+                      <Text style={styles.campusStripSub} numberOfLines={1}>Explore the campus exchange</Text>
+                    </View>
+                    <View style={styles.campusStatChip}>
+                      <Text style={styles.campusStatNumber}>
+                        {campusHaus?.piece_count ?? 0}
+                        <Text style={styles.campusStatLabel}> items</Text>
+                      </Text>
+                    </View>
+                    <Ionicons name="arrow-forward" size={20} color={theme.colors.ink} />
+                  </View>
                 </View>
               </Pressable>
             )}
@@ -246,11 +279,78 @@ const styles = StyleSheet.create({
     letterSpacing: 2,
   },
 
-  // Campus strip
-  campusStrip: { flexDirection: 'row', alignItems: 'center', gap: 10, marginHorizontal: 18, marginBottom: 12, backgroundColor: theme.colors.ivoryDark, borderWidth: 1, borderColor: theme.colors.ivoryMid, borderRadius: 2, padding: 10 },
-  campusBadge: { width: 28, height: 28, borderRadius: 14, backgroundColor: theme.colors.yellow, borderWidth: 1, borderColor: '#C8C820', justifyContent: 'center', alignItems: 'center' },
-  campusStripTitle: { fontFamily: theme.fonts.interSemiBold, fontSize: 11, color: theme.colors.ink },
-  campusStripSub: { fontFamily: theme.fonts.interLight, fontSize: 9, color: theme.colors.muted },
+  // Campus strip — matches the yellow "Exchanges" card on ProfileScreen (BorrowsMiniCard):
+  // ink border + radius on an outer wrapper, yellow fill with a darker-yellow bottom seam on an
+  // inner layer, inset (rgba(0,0,0,0.06)) tiles for the icon and stat chip. #C8C820/#5A5A00 aren't
+  // theme tokens — matching BorrowsMiniCard's own hardcoded values, not inventing new ones.
+  campusStrip: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  campusStripActive: {
+    transform: [{ translateX: -2 }, { translateY: -2 }],
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  campusStripBorder: {
+    borderWidth: 1,
+    borderColor: theme.colors.ink,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  campusStripInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.colors.yellow,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C8C820',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  campusIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  campusTextBlock: { flex: 1, minWidth: 0 },
+  campusStripTitle: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: theme.colors.yellowText,
+    lineHeight: 16,
+  },
+  campusStripSub: {
+    fontFamily: theme.fonts.interRegular,
+    fontSize: 11,
+    color: '#5A5A00',
+    marginTop: 2,
+  },
+  campusStatChip: {
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  campusStatNumber: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 13,
+    color: theme.colors.yellowText,
+  },
+  campusStatLabel: {
+    fontFamily: theme.fonts.interRegular,
+    fontSize: 11,
+    color: '#5A5A00',
+  },
 
   // FAB — bottom offset is set inline (base 24 + the safe-area inset)
   fab: {

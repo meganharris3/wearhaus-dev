@@ -11,6 +11,7 @@ function makeChain(result: { data: unknown; error: unknown }) {
   });
 
   chain.single = jest.fn().mockResolvedValue(result);
+  chain.maybeSingle = jest.fn().mockResolvedValue(result);
   chain.then = (resolve: (v: unknown) => void, reject: (e: unknown) => void) =>
     Promise.resolve(result).then(resolve, reject);
 
@@ -35,6 +36,7 @@ const mockRpc = supabase.rpc as jest.Mock;
 import {
   fetchMyHauses,
   fetchAllHauses,
+  fetchCampusHaus,
   fetchHausMembers,
   fetchAllHausMembers,
   createHaus,
@@ -152,6 +154,42 @@ describe('fetchAllHauses', () => {
   it('throws on Supabase error', async () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'Network error' } }));
     await expect(fetchAllHauses()).rejects.toThrow('Network error');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// fetchCampusHaus
+// ---------------------------------------------------------------------------
+describe('fetchCampusHaus', () => {
+  it('queries hauses filtered to the given campus and haus_type "campus"', async () => {
+    const chain = makeChain({ data: makeHaus({ id: 'campus-h1' }), error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchCampusHaus('campus-1');
+
+    expect(mockFrom).toHaveBeenCalledWith('hauses');
+    expect(chain.eq).toHaveBeenCalledWith('campus_id', 'campus-1');
+    expect(chain.eq).toHaveBeenCalledWith('haus_type', 'campus');
+  });
+
+  it('returns the haus when one exists', async () => {
+    const haus = makeHaus({ id: 'campus-h1', piece_count: 42 });
+    mockFrom.mockReturnValue(makeChain({ data: haus, error: null }));
+
+    const result = await fetchCampusHaus('campus-1');
+
+    expect(result).toEqual(haus);
+  });
+
+  it('returns null when the campus closet has not been created yet', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
+    const result = await fetchCampusHaus('campus-1');
+    expect(result).toBeNull();
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'Network error' } }));
+    await expect(fetchCampusHaus('campus-1')).rejects.toThrow('Network error');
   });
 });
 

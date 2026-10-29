@@ -7,12 +7,20 @@ import React from 'react';
 import { render, screen, fireEvent, act } from '@testing-library/react-native';
 
 const mockNavigate = jest.fn();
+let mockRouteParams: { campusId?: string } | undefined = undefined;
 jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
+  useRoute: () => ({ params: mockRouteParams }),
 }));
 
+let mockProfile: { campus_verified?: boolean; campus_id?: string; campus_name?: string } | null = null;
 jest.mock('../../context/AuthContext', () => ({
-  useAuth: () => ({ user: { id: 'me' } }),
+  useAuth: () => ({ user: { id: 'me' }, profile: mockProfile }),
+}));
+
+jest.mock('../../services/hausService', () => ({
+  fetchCampusHaus: jest.fn(),
+  fetchAllHausMembers: jest.fn(),
 }));
 
 let mockFriends: Array<{ id: string }> = [];
@@ -42,10 +50,13 @@ jest.mock('../../services/itemService', () => ({
 }));
 
 import { fetchFeedItems } from '../../services/itemService';
+import { fetchCampusHaus, fetchAllHausMembers } from '../../services/hausService';
 import ExploreScreen from '../../screens/home/ExploreScreen';
 import type { Item } from '../../types';
 
 const mockFetchFeed = fetchFeedItems as jest.Mock;
+const mockFetchCampusHaus = fetchCampusHaus as jest.Mock;
+const mockFetchAllHausMembers = fetchAllHausMembers as jest.Mock;
 
 const makeItem = (overrides: Partial<Item>): Item => ({
   id: 'x',
@@ -76,6 +87,10 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockFriends = [];
   mockHauses = [];
+  mockProfile = null;
+  mockRouteParams = undefined;
+  mockFetchCampusHaus.mockResolvedValue(null);
+  mockFetchAllHausMembers.mockResolvedValue([]);
 });
 
 describe('Explore visibility', () => {
@@ -166,5 +181,56 @@ describe('Explore audience pills', () => {
     expect(shown('Public Dress')).toBe(true);
     expect(shown('Pal Jacket')).toBe(true);
     expect(shown('Haus Blazer')).toBe(true);
+  });
+});
+
+describe('Explore campus audience', () => {
+  it('does not show a Campus pill when the viewer is not campus-verified', async () => {
+    mockProfile = { campus_verified: false };
+    await renderWith([makeItem({ id: '1', name: 'Public Dress' })]);
+    expect(screen.queryByText('CAMPUS')).toBeNull();
+  });
+
+  it('shows a Campus pill, labeled with the campus name, once verified', async () => {
+    mockProfile = { campus_verified: true, campus_id: 'uc-berkeley', campus_name: 'UC Berkeley' };
+    await renderWith([makeItem({ id: '1', name: 'Public Dress' })]);
+    expect(screen.getByText('UC BERKELEY')).toBeTruthy();
+  });
+
+  it('CAMPUS narrows to items owned by members of the campus haus', async () => {
+    mockProfile = { campus_verified: true, campus_id: 'uc-berkeley', campus_name: 'UC Berkeley' };
+    mockFetchCampusHaus.mockResolvedValue({ id: 'campus-haus-1', name: 'x', member_count: 1, piece_count: 1 });
+    mockFetchAllHausMembers.mockResolvedValue([{ userId: 'classmate', role: 'member', joinedAt: '', displayName: 'x' }]);
+
+    await renderWith([
+      makeItem({ id: '1', name: 'Public Dress' }),
+      makeItem({ id: '2', name: 'Classmate Jacket', owner_id: 'classmate' }),
+    ]);
+    await settle(); // the campus-member fetch resolves on a separate effect from the feed
+
+    fireEvent.press(screen.getByText('UC BERKELEY'));
+    await settle();
+
+    expect(shown('Classmate Jacket')).toBe(true);
+    expect(shown('Public Dress')).toBe(false);
+    expect(mockFetchCampusHaus).toHaveBeenCalledWith('uc-berkeley');
+    expect(mockFetchAllHausMembers).toHaveBeenCalledWith('campus-haus-1');
+  });
+
+  it('defaults the audience to Campus when arriving with a campusId route param', async () => {
+    mockProfile = { campus_verified: true, campus_id: 'uc-berkeley', campus_name: 'UC Berkeley' };
+    mockRouteParams = { campusId: 'uc-berkeley' };
+    mockFetchCampusHaus.mockResolvedValue({ id: 'campus-haus-1', name: 'x', member_count: 1, piece_count: 1 });
+    mockFetchAllHausMembers.mockResolvedValue([{ userId: 'classmate', role: 'member', joinedAt: '', displayName: 'x' }]);
+
+    await renderWith([
+      makeItem({ id: '1', name: 'Public Dress' }),
+      makeItem({ id: '2', name: 'Classmate Jacket', owner_id: 'classmate' }),
+    ]);
+    await settle();
+
+    // No tap on the pill — it should already be filtered to campus members on arrival.
+    expect(shown('Classmate Jacket')).toBe(true);
+    expect(shown('Public Dress')).toBe(false);
   });
 });
