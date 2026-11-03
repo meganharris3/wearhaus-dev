@@ -179,9 +179,11 @@ export default function HomeScreen() {
               </Pressable>
             )}
 
-            {/* Hauses strip — always visible, unlike the campus one above. Same treatment as
-                the campus strip (yellow fill, ink border, inset icon tile, hover shadow) and
-                the same row height (identical icon size / padding / font sizes). */}
+            {/* Hauses strip — always visible, unlike the campus one above. Same row height/shape
+                as the campus strip (ink border, inset icon tile, hover shadow), white fill
+                instead of yellow, plus a direct "create a Haus" button of its own — nested
+                inside the card's Pressable, so tapping it claims the touch and navigates to
+                CreateHaus without also firing the card's own "go to Hauses" onPress. */}
             <Pressable
               style={({ pressed }) => [
                 styles.hausesStrip,
@@ -202,7 +204,15 @@ export default function HomeScreen() {
                     <Text style={styles.hausesStripTitle} numberOfLines={1}>Hauses</Text>
                     <Text style={styles.hausesStripSub} numberOfLines={1}>Browse yours, or start a new one</Text>
                   </View>
-                  <Ionicons name="arrow-forward" size={20} color={theme.colors.ink} />
+                  <Pressable
+                    style={styles.hausesCreateBtn}
+                    onPress={() => navigation.navigate('CreateHaus')}
+                    hitSlop={8}
+                    accessibilityRole="button"
+                    accessibilityLabel="Create a new Haus"
+                  >
+                    <Ionicons name="add" size={18} color={theme.colors.ink} />
+                  </Pressable>
                 </View>
               </View>
             </Pressable>
@@ -409,9 +419,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
-    backgroundColor: theme.colors.yellow,
+    backgroundColor: theme.colors.ivory,
     borderBottomWidth: 1,
-    borderBottomColor: '#C8C820',
+    borderBottomColor: theme.colors.ivoryMid,
     paddingVertical: 10,
     paddingHorizontal: 12,
   },
@@ -419,7 +429,7 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 9,
-    backgroundColor: 'rgba(0,0,0,0.06)',
+    backgroundColor: theme.colors.ivoryDark,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -429,14 +439,23 @@ const styles = StyleSheet.create({
     fontSize: 13,
     letterSpacing: 0.4,
     textTransform: 'uppercase',
-    color: theme.colors.yellowText,
+    color: theme.colors.ink,
     lineHeight: 16,
   },
   hausesStripSub: {
     fontFamily: theme.fonts.interRegular,
     fontSize: 11,
-    color: '#5A5A00',
+    color: theme.colors.muted,
     marginTop: 2,
+  },
+  hausesCreateBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   // FAB — bottom offset is set inline (base 24 + the safe-area inset)
