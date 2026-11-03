@@ -32,6 +32,9 @@ type HomeNavProp = CompositeNavigationProp<
   NavigationProp<AppStackParamList>
 >;
 
+// TEMP: hide the Hauses banner for now — ask before removing it for good.
+const SHOW_HAUSES_STRIP = false;
+
 export default function HomeScreen() {
   const navigation = useNavigation<HomeNavProp>();
   const insets = useSafeAreaInsets();
@@ -179,43 +182,45 @@ export default function HomeScreen() {
               </Pressable>
             )}
 
-            {/* Hauses strip — always visible, unlike the campus one above. Same row height/shape
-                as the campus strip (ink border, inset icon tile, hover shadow), white fill
-                instead of yellow, plus a direct "create a Haus" button of its own — nested
-                inside the card's Pressable, so tapping it claims the touch and navigates to
-                CreateHaus without also firing the card's own "go to Hauses" onPress. */}
-            <Pressable
-              style={({ pressed }) => [
-                styles.hausesStrip,
-                (pressed || hausesStripActive) && styles.hausesStripActive,
-              ]}
-              onPress={() => navigation.navigate('Hauses')}
-              onHoverIn={() => setHausesStripActive(true)}
-              onHoverOut={() => setHausesStripActive(false)}
-              accessibilityRole="button"
-              accessibilityLabel="Hauses, browse or start a shared closet"
-            >
-              <View style={styles.hausesStripBorder}>
-                <View style={styles.hausesStripInner}>
-                  <View style={styles.hausesIconTile}>
-                    <Ionicons name="home-outline" size={20} color={theme.colors.ink} />
+            {/* Hauses strip — TEMP: hidden for now, ask before removing for good. Same row
+                height/shape as the campus strip (ink border, inset icon tile, hover shadow),
+                white fill instead of yellow, plus a direct "create a Haus" button of its own —
+                nested inside the card's Pressable, so tapping it claims the touch and navigates
+                to CreateHaus without also firing the card's own "go to Hauses" onPress. */}
+            {SHOW_HAUSES_STRIP && (
+              <Pressable
+                style={({ pressed }) => [
+                  styles.hausesStrip,
+                  (pressed || hausesStripActive) && styles.hausesStripActive,
+                ]}
+                onPress={() => navigation.navigate('Hauses')}
+                onHoverIn={() => setHausesStripActive(true)}
+                onHoverOut={() => setHausesStripActive(false)}
+                accessibilityRole="button"
+                accessibilityLabel="Hauses, browse or start a shared closet"
+              >
+                <View style={styles.hausesStripBorder}>
+                  <View style={styles.hausesStripInner}>
+                    <View style={styles.hausesIconTile}>
+                      <Ionicons name="home-outline" size={20} color={theme.colors.ink} />
+                    </View>
+                    <View style={styles.hausesTextBlock}>
+                      <Text style={styles.hausesStripTitle} numberOfLines={1}>Hauses</Text>
+                      <Text style={styles.hausesStripSub} numberOfLines={1}>Browse yours, or start a new one</Text>
+                    </View>
+                    <Pressable
+                      style={styles.hausesCreateBtn}
+                      onPress={() => navigation.navigate('CreateHaus')}
+                      hitSlop={8}
+                      accessibilityRole="button"
+                      accessibilityLabel="Create a new Haus"
+                    >
+                      <Ionicons name="add" size={18} color={theme.colors.ink} />
+                    </Pressable>
                   </View>
-                  <View style={styles.hausesTextBlock}>
-                    <Text style={styles.hausesStripTitle} numberOfLines={1}>Hauses</Text>
-                    <Text style={styles.hausesStripSub} numberOfLines={1}>Browse yours, or start a new one</Text>
-                  </View>
-                  <Pressable
-                    style={styles.hausesCreateBtn}
-                    onPress={() => navigation.navigate('CreateHaus')}
-                    hitSlop={8}
-                    accessibilityRole="button"
-                    accessibilityLabel="Create a new Haus"
-                  >
-                    <Ionicons name="add" size={18} color={theme.colors.ink} />
-                  </Pressable>
                 </View>
-              </View>
-            </Pressable>
+              </Pressable>
+            )}
 
             {/* Section label */}
             <View style={styles.dividerRow}>
