@@ -22,18 +22,17 @@ import Toggle from '../../components/Toggle';
 import StepProgressBar from '../../components/StepProgressBar';
 import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
-import type { Item } from '../../types';
+import { useFriends } from '../../context/FriendsContext';
+import { useAuth } from '../../context/AuthContext';
+import { inviteMembersToHaus } from '../../services/hausService';
+import type { Item, Friend } from '../../types';
 import type { Haus } from '../../types';
 
 const HAUS_TYPES = ['Sorority / Frat', 'Dorm Floor', 'Friend Group', 'Roommates', 'Other'];
 const INVITE_LINK = 'wearhaus.app/join/alpha-phi-c';
 
-interface Member {
-  id: string;
-  name: string;
-  handle: string;
-  initials: string;
-  isYou: boolean;
+function initialsOf(name: string): string {
+  return name.trim().split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
 }
 
 
@@ -49,6 +48,8 @@ export default function CreateHausScreen() {
   const navigation = useNavigation();
   const { addHaus } = useHauses();
   const { items: closetItems } = useCloset();
+  const { friends } = useFriends();
+  const { user, profile } = useAuth();
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -58,11 +59,17 @@ export default function CreateHausScreen() {
   const [hausType, setHausType]       = useState<string | null>(null);
   const [isPrivate, setIsPrivate]     = useState(true);
 
-  // Step 2
-  const [members, setMembers] = useState<Member[]>([
-    { id: 'me', name: 'Mia Chen', handle: '@miachen', initials: 'MC', isYou: true },
-  ]);
-  const [inviteInput, setInviteInput] = useState('');
+  // Step 2 — selected friends get a real pending invite (haus_invitations), not a
+  // direct membership insert: RLS only lets a user insert their own membership row,
+  // so they join once they accept it, same as a friend request.
+  const [selectedFriendIds, setSelectedFriendIds] = useState<string[]>([]);
+  const [memberSearch, setMemberSearch] = useState('');
+
+  function toggleMember(friendId: string) {
+    setSelectedFriendIds((prev) =>
+      prev.includes(friendId) ? prev.filter((id) => id !== friendId) : [...prev, friendId],
+    );
+  }
 
   // Step 3
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
@@ -82,26 +89,6 @@ export default function CreateHausScreen() {
     setCurrentStep((s) => s + 1);
   }
 
-  function handleAddMember() {
-    if (!inviteInput.trim()) return;
-    const raw = inviteInput.trim();
-    setMembers((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        name: raw,
-        handle: raw.startsWith('@') ? raw : `@${raw}`,
-        initials: raw.replace('@', '').slice(0, 2).toUpperCase(),
-        isYou: false,
-      },
-    ]);
-    setInviteInput('');
-  }
-
-  function handleRemoveMember(id: string) {
-    setMembers((prev) => prev.filter((m) => m.id !== id));
-  }
-
   function toggleItem(id: string) {
     setSelectedItems((prev) =>
       prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id],
@@ -119,11 +106,22 @@ export default function CreateHausScreen() {
       id: Date.now().toString(),
       name: hausName,
       description,
-      member_count: members.length,
+      // Only the creator is a member at this point — invited friends join once they
+      // accept, so they aren't counted yet. The server's own row overrides this anyway.
+      member_count: 1,
       piece_count: selectedItems.length,
       items: pickedItems,
     };
-    await addHaus(newHaus);
+    const finalHaus = await addHaus(newHaus);
+
+    if (user?.id && selectedFriendIds.length > 0) {
+      try {
+        await inviteMembersToHaus(finalHaus.id, user.id, selectedFriendIds);
+      } catch {
+        // Haus itself is already created — a failed invite batch shouldn't block finishing.
+      }
+    }
+
     navigation.goBack();
   }
 
@@ -172,11 +170,12 @@ export default function CreateHausScreen() {
       )}
       {currentStep === 2 && (
         <Step2
-          members={members}
-          inviteInput={inviteInput}
-          setInviteInput={setInviteInput}
-          onAddMember={handleAddMember}
-          onRemoveMember={handleRemoveMember}
+          friends={friends}
+          selectedFriendIds={selectedFriendIds}
+          onToggleMember={toggleMember}
+          search={memberSearch}
+          setSearch={setMemberSearch}
+          youName={profile?.display_name ?? 'You'}
           onCopyLink={handleCopyLink}
           inviteLink={INVITE_LINK}
         />
@@ -191,7 +190,8 @@ export default function CreateHausScreen() {
       {currentStep === 4 && (
         <Step4
           hausName={hausName}
-          members={members}
+          youName={profile?.display_name ?? 'You'}
+          invitedFriends={friends.filter((f) => selectedFriendIds.includes(f.id))}
           selectedItems={selectedItems}
           onGoToHaus={handleGoToHaus}
           onCopyLink={handleCopyLink}
@@ -270,56 +270,73 @@ function Step1({
 // STEP 2 — Invite Members
 // ─────────────────────────────────────────────
 function Step2({
-  members, inviteInput, setInviteInput,
-  onAddMember, onRemoveMember, onCopyLink, inviteLink,
+  friends, selectedFriendIds, onToggleMember, search, setSearch, youName,
+  onCopyLink, inviteLink,
 }: {
-  members: Member[]; inviteInput: string; setInviteInput: (v: string) => void;
-  onAddMember: () => void; onRemoveMember: (id: string) => void;
+  friends: Friend[]; selectedFriendIds: string[]; onToggleMember: (id: string) => void;
+  search: string; setSearch: (v: string) => void; youName: string;
   onCopyLink: () => void; inviteLink: string;
 }) {
+  const visibleFriends = search.trim()
+    ? friends.filter((f) => f.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : friends;
+
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.scrollContent}
       keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
 
       <SectionHeader label="Add Members" />
 
-      {/* Invite input row */}
+      {/* Search row — filters the friends list below, doesn't add arbitrary text */}
       <View style={styles.inviteRow}>
         <TextInput
-          value={inviteInput}
-          onChangeText={setInviteInput}
-          placeholder="@username or phone…"
+          value={search}
+          onChangeText={setSearch}
+          placeholder="Search friends…"
           placeholderTextColor={theme.colors.muted}
           style={styles.inviteInput}
-          onSubmitEditing={onAddMember}
-          returnKeyType="done"
+          returnKeyType="search"
         />
-        <Pressable onPress={onAddMember} style={styles.inviteAddBtn}>
-          <Text style={styles.inviteAddText}>ADD</Text>
-        </Pressable>
       </View>
 
-      {/* Member list */}
-      {members.map((m) => (
-        <View key={m.id} style={styles.memberRow}>
-          <View style={[styles.memberAvatar, m.isYou && styles.memberAvatarSelf]}>
-            <Text style={styles.memberInitials}>{m.initials}</Text>
-          </View>
-          <View style={styles.memberInfo}>
-            <Text style={styles.memberName}>{m.name}</Text>
-            <Text style={styles.memberHandle}>{m.handle}</Text>
-          </View>
-          {m.isYou ? (
-            <View style={styles.youBadge}>
-              <Text style={styles.youBadgeText}>YOU</Text>
-            </View>
-          ) : (
-            <Pressable onPress={() => onRemoveMember(m.id)} hitSlop={8}>
-              <Ionicons name="close" size={16} color={theme.colors.muted} />
-            </Pressable>
-          )}
+      {/* You, always a member — not selectable */}
+      <View style={styles.memberRow}>
+        <View style={[styles.memberAvatar, styles.memberAvatarSelf]}>
+          <Text style={styles.memberInitials}>{initialsOf(youName)}</Text>
         </View>
-      ))}
+        <View style={styles.memberInfo}>
+          <Text style={styles.memberName}>{youName}</Text>
+        </View>
+        <View style={styles.youBadge}>
+          <Text style={styles.youBadgeText}>YOU</Text>
+        </View>
+      </View>
+
+      {/* Friends list — tap to invite. Selected ones get a pending haus_invitations row
+          once the Haus is actually created (friends.length === 0 shows a hint instead). */}
+      {friends.length === 0 ? (
+        <Text style={styles.noFriendsText}>
+          Add some friends first — you'll be able to invite them to Hauses from here.
+        </Text>
+      ) : (
+        visibleFriends.map((f) => {
+          const selected = selectedFriendIds.includes(f.id);
+          return (
+            <Pressable key={f.id} onPress={() => onToggleMember(f.id)} style={styles.memberRow}>
+              <View style={styles.memberAvatar}>
+                <Text style={styles.memberInitials}>{f.initials}</Text>
+              </View>
+              <View style={styles.memberInfo}>
+                <Text style={styles.memberName}>{f.name}</Text>
+                <Text style={styles.memberHandle}>{f.handle}</Text>
+              </View>
+              <View style={[styles.memberSelectDot, selected && styles.memberSelectDotActive]}>
+                {selected && <Ionicons name="checkmark" size={12} color={theme.colors.yellowText} />}
+              </View>
+            </Pressable>
+          );
+        })
+      )}
 
       <SectionHeader label="Share Invite" />
 
@@ -402,12 +419,12 @@ function Step3({
 // STEP 4 — Success
 // ─────────────────────────────────────────────
 function Step4({
-  hausName, members, selectedItems, onGoToHaus, onCopyLink, inviteLink,
+  hausName, youName, invitedFriends, selectedItems, onGoToHaus, onCopyLink, inviteLink,
 }: {
-  hausName: string; members: Member[]; selectedItems: string[];
+  hausName: string; youName: string; invitedFriends: Friend[]; selectedItems: string[];
   onGoToHaus: () => void; onCopyLink: () => void; inviteLink: string;
 }) {
-  const previewMembers = members.slice(0, 4);
+  const previewFriends = invitedFriends.slice(0, 3);
 
   return (
     <ScrollView
@@ -424,27 +441,25 @@ function Step4({
         {hausName || 'Your Haus'}{'\n'}IS LIVE
       </Text>
       <Text style={styles.successSub}>
-        Your Haus is ready. Invite members and start sharing.
+        {invitedFriends.length > 0
+          ? `Invites sent — they'll join once they accept.`
+          : 'Your Haus is ready. Invite members and start sharing.'}
       </Text>
 
       {/* Preview card */}
       <View style={styles.previewCard}>
         <Text style={styles.previewName}>{(hausName || 'Your Haus').toUpperCase()}</Text>
         <Text style={styles.previewMeta}>
-          {members.length} member{members.length !== 1 ? 's' : ''} · {selectedItems.length} piece{selectedItems.length !== 1 ? 's' : ''}
+          1 member{invitedFriends.length > 0 ? ` · ${invitedFriends.length} invited` : ''} · {selectedItems.length} piece{selectedItems.length !== 1 ? 's' : ''}
         </Text>
-        {/* Mini avatar stack */}
+        {/* Mini avatar stack — you, then whoever was invited */}
         <View style={styles.previewAvatars}>
-          {previewMembers.map((m, i) => (
-            <View
-              key={m.id}
-              style={[
-                styles.previewAvatar,
-                i > 0 && { marginLeft: -8 },
-                m.isYou && { backgroundColor: theme.colors.yellow },
-              ]}
-            >
-              <Text style={styles.previewAvatarText}>{m.initials}</Text>
+          <View style={[styles.previewAvatar, { backgroundColor: theme.colors.yellow }]}>
+            <Text style={styles.previewAvatarText}>{initialsOf(youName)}</Text>
+          </View>
+          {previewFriends.map((f) => (
+            <View key={f.id} style={[styles.previewAvatar, { marginLeft: -8 }]}>
+              <Text style={styles.previewAvatarText}>{f.initials}</Text>
             </View>
           ))}
         </View>
@@ -683,6 +698,27 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: theme.colors.yellowText,
     letterSpacing: 1,
+  },
+  noFriendsText: {
+    fontFamily: theme.fonts.interLight,
+    fontSize: 12,
+    color: theme.colors.muted,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    lineHeight: 18,
+  },
+  memberSelectDot: {
+    width: 22,
+    height: 22,
+    borderRadius: 11,
+    borderWidth: 1.5,
+    borderColor: theme.colors.ivoryMid,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  memberSelectDotActive: {
+    backgroundColor: theme.colors.yellow,
+    borderColor: theme.colors.yellowBorder,
   },
   shareRow: {
     flexDirection: 'row',

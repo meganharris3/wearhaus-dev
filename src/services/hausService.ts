@@ -58,6 +58,52 @@ export async function createHaus(
   return data as Haus;
 }
 
+/**
+ * Invites each of inviteeIds to hausId, as pending haus_invitations rows — not a direct
+ * membership insert. haus_memberships only allows a user to insert their own row
+ * (002_security_fixes.sql), so the invitee has to accept it themselves (acceptHausInvite);
+ * this just creates the pending invites a trg_notify_haus_invite turns into notifications.
+ * Silently skips anyone already invited/a member (the table's unique(haus_id, invitee_id)
+ * constraint) rather than failing the whole batch over one duplicate.
+ */
+export async function inviteMembersToHaus(
+  hausId: string,
+  inviterId: string,
+  inviteeIds: string[],
+): Promise<void> {
+  if (inviteeIds.length === 0) return;
+  const { error } = await supabase
+    .from('haus_invitations')
+    .upsert(
+      inviteeIds.map((inviteeId) => ({ haus_id: hausId, inviter_id: inviterId, invitee_id: inviteeId })),
+      { onConflict: 'haus_id,invitee_id', ignoreDuplicates: true },
+    );
+  if (error) throw new Error(error.message);
+}
+
+export async function acceptHausInvite(invitationId: string, hausId: string, userId: string): Promise<void> {
+  const { error: inviteError } = await supabase
+    .from('haus_invitations')
+    .update({ status: 'accepted' })
+    .eq('id', invitationId)
+    .eq('invitee_id', userId);
+  if (inviteError) throw new Error(inviteError.message);
+
+  const { error: memberError } = await supabase
+    .from('haus_memberships')
+    .insert({ haus_id: hausId, user_id: userId, role: 'member' });
+  if (memberError) throw new Error(memberError.message);
+}
+
+export async function declineHausInvite(invitationId: string, userId: string): Promise<void> {
+  const { error } = await supabase
+    .from('haus_invitations')
+    .update({ status: 'declined' })
+    .eq('id', invitationId)
+    .eq('invitee_id', userId);
+  if (error) throw new Error(error.message);
+}
+
 export async function updateHaus(
   hausId: string,
   updates: Partial<Pick<Haus, 'name' | 'description'>>,

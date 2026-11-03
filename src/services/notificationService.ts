@@ -6,6 +6,7 @@ export type NotificationKind =
   | 'friend_request'
   | 'friend_accepted'
   | 'haus_invite'
+  | 'haus_accepted'
   | 'message'
   | 'system';
 

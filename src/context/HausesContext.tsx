@@ -11,7 +11,7 @@ function storageKey(userId: string | undefined) {
 
 interface HausesContextValue {
   hauses: Haus[];
-  addHaus: (haus: Haus) => Promise<void>;
+  addHaus: (haus: Haus) => Promise<Haus>;
   leaveHaus: (hausId: string) => Promise<void>;
   renameHaus: (hausId: string, name: string) => Promise<void>;
   isLoading: boolean;
@@ -49,7 +49,7 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [key, user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  async function addHaus(haus: Haus) {
+  async function addHaus(haus: Haus): Promise<Haus> {
     let finalHaus = haus;
 
     // Save to Supabase if logged in
@@ -71,6 +71,7 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
     } catch {
       // non-fatal
     }
+    return finalHaus;
   }
 
   async function renameHaus(hausId: string, name: string) {

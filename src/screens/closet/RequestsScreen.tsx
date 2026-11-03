@@ -31,6 +31,8 @@ function labelFor(request: Request): string {
   if (request.type === 'friend_request') return 'FRIEND REQUEST';
   if (request.type === 'friend_accepted') return 'NEW FRIEND';
   if (request.type === 'borrow_accepted') return 'REQUEST ACCEPTED';
+  if (request.type === 'haus_invite') return 'HAUS INVITE';
+  if (request.type === 'haus_accepted') return 'NEW MEMBER';
   return STATUS_LABEL[request.status];
 }
 
@@ -40,6 +42,8 @@ function bodyFor(request: Request): string {
     case 'friend_request':  return ' sent you a friend request.';
     case 'friend_accepted': return ' accepted your friend request.';
     case 'borrow_accepted': return ` accepted your request to borrow ${request.itemName}. Due back ${request.dueBack ?? 'TBD'}.`;
+    case 'haus_invite':     return ` invited you to join ${request.hausName}.`;
+    case 'haus_accepted':   return ` joined ${request.hausName}.`;
     default:
       if (request.status === 'pending')
         return ` wants to borrow your ${request.itemName} for ${days} day${days > 1 ? 's' : ''}.`;

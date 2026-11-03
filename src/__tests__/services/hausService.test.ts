@@ -4,7 +4,7 @@
 
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const methods = ['select', 'eq', 'order', 'limit', 'range', 'insert', 'delete', 'update'];
+  const methods = ['select', 'eq', 'order', 'limit', 'range', 'insert', 'delete', 'update', 'upsert'];
 
   methods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
@@ -41,6 +41,9 @@ import {
   fetchAllHausMembers,
   createHaus,
   leaveHaus,
+  inviteMembersToHaus,
+  acceptHausInvite,
+  declineHausInvite,
 } from '../../services/hausService';
 import type { Haus } from '../../types';
 
@@ -302,6 +305,82 @@ describe('createHaus', () => {
 
     const insertCall = insertChain.insert.mock.calls[0][0];
     expect(insertCall).not.toHaveProperty('member_count');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// inviteMembersToHaus / acceptHausInvite / declineHausInvite
+// ---------------------------------------------------------------------------
+describe('inviteMembersToHaus', () => {
+  it('upserts one pending haus_invitations row per invitee, ignoring duplicates', async () => {
+    const chain = makeChain({ data: null, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await inviteMembersToHaus('h1', 'admin-1', ['friend-a', 'friend-b']);
+
+    expect(mockFrom).toHaveBeenCalledWith('haus_invitations');
+    expect(chain.upsert).toHaveBeenCalledWith(
+      [
+        { haus_id: 'h1', inviter_id: 'admin-1', invitee_id: 'friend-a' },
+        { haus_id: 'h1', inviter_id: 'admin-1', invitee_id: 'friend-b' },
+      ],
+      { onConflict: 'haus_id,invitee_id', ignoreDuplicates: true },
+    );
+  });
+
+  it('does not query at all when given no invitees', async () => {
+    await inviteMembersToHaus('h1', 'admin-1', []);
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
+    await expect(inviteMembersToHaus('h1', 'admin-1', ['friend-a'])).rejects.toThrow('DB error');
+  });
+});
+
+describe('acceptHausInvite', () => {
+  it('marks the invitation accepted, scoped to the invitee, then inserts a member row', async () => {
+    const inviteChain = makeChain({ data: null, error: null });
+    const memberChain = makeChain({ data: null, error: null });
+    mockFrom
+      .mockReturnValueOnce(inviteChain)  // .from('haus_invitations')
+      .mockReturnValueOnce(memberChain); // .from('haus_memberships')
+
+    await acceptHausInvite('invite-1', 'h1', 'user-1');
+
+    expect(mockFrom).toHaveBeenNthCalledWith(1, 'haus_invitations');
+    expect(inviteChain.update).toHaveBeenCalledWith({ status: 'accepted' });
+    expect(inviteChain.eq).toHaveBeenCalledWith('id', 'invite-1');
+    expect(inviteChain.eq).toHaveBeenCalledWith('invitee_id', 'user-1');
+
+    expect(mockFrom).toHaveBeenNthCalledWith(2, 'haus_memberships');
+    expect(memberChain.insert).toHaveBeenCalledWith({ haus_id: 'h1', user_id: 'user-1', role: 'member' });
+  });
+
+  it('throws without inserting a membership row if marking the invitation accepted fails', async () => {
+    mockFrom.mockReturnValueOnce(makeChain({ data: null, error: { message: 'RLS denied' } }));
+    await expect(acceptHausInvite('invite-1', 'h1', 'user-1')).rejects.toThrow('RLS denied');
+    expect(mockFrom).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('declineHausInvite', () => {
+  it('marks the invitation declined, scoped to the invitee', async () => {
+    const chain = makeChain({ data: null, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await declineHausInvite('invite-1', 'user-1');
+
+    expect(mockFrom).toHaveBeenCalledWith('haus_invitations');
+    expect(chain.update).toHaveBeenCalledWith({ status: 'declined' });
+    expect(chain.eq).toHaveBeenCalledWith('id', 'invite-1');
+    expect(chain.eq).toHaveBeenCalledWith('invitee_id', 'user-1');
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
+    await expect(declineHausInvite('invite-1', 'user-1')).rejects.toThrow('DB error');
   });
 });
 

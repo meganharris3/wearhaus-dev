@@ -8,6 +8,7 @@ import {
 } from '../services/notificationService';
 import { acceptFriendRequest, declineFriendRequest } from '../services/friendService';
 import { respondToBorrowRequest } from '../services/messageService';
+import { acceptHausInvite, declineHausInvite } from '../services/hausService';
 import { formatMessageTime } from '../utils/dateUtils';
 
 export type RequestStatus = 'pending' | 'accepted' | 'declined';
@@ -16,6 +17,8 @@ export type NotificationType =
   | 'borrow_accepted'
   | 'friend_request'
   | 'friend_accepted'
+  | 'haus_invite'
+  | 'haus_accepted'
   | 'return_reminder'
   | 'review_prompt';
 
@@ -33,14 +36,15 @@ export interface Request {
   direction?: 'incoming' | 'outgoing';
   ownerName?: string;
   total?: number;
+  hausName?: string;
 }
 
 const str = (v: unknown): string => (typeof v === 'string' ? v : '');
 
 /**
  * Maps a notification row to the display shape the screen uses. Returns null for
- * rows with no UI (haus_invite / message / system) and for requests that have
- * already been answered, from here or from the chat thread.
+ * rows with no UI (message / system) and for requests that have already been
+ * answered, from here or from the chat thread.
  */
 function toRequest(row: NotificationRow): Request | null {
   const base = { id: row.id, read: row.read, createdAt: formatMessageTime(row.createdAt) };
@@ -65,6 +69,19 @@ function toRequest(row: NotificationRow): Request | null {
         ...base, type: 'borrow_accepted', status: 'accepted',
         borrowerName: str(p.from_name), itemName: str(p.item_name),
         dueBack: str(p.due_back) || undefined, dateRange: null, direction: 'outgoing',
+      };
+    case 'haus_invite':
+      if (row.resolved) return null;
+      return {
+        ...base, type: 'haus_invite', status: 'pending',
+        borrowerName: str(p.inviter_name), itemName: '', dateRange: null,
+        hausName: str(p.haus_name),
+      };
+    case 'haus_accepted':
+      return {
+        ...base, type: 'haus_accepted', status: 'accepted',
+        borrowerName: str(p.from_name), itemName: '', dateRange: null,
+        hausName: str(p.haus_name),
       };
     default:
       return null;
@@ -133,6 +150,11 @@ export function RequestsProvider({ children }: { children: React.ReactNode }) {
       await respondToBorrowRequest(
         str(row.payload.message_id), str(row.payload.thread_id), userId, status, firstName,
       );
+    } else if (row.type === 'haus_invite') {
+      const invitationId = str(row.payload.invitation_id);
+      const hausId = str(row.payload.haus_id);
+      if (status === 'accepted') await acceptHausInvite(invitationId, hausId, userId);
+      else await declineHausInvite(invitationId, userId);
     } else {
       return;
     }
