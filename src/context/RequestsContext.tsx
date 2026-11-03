@@ -132,6 +132,16 @@ export function RequestsProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [refreshRequests]);
 
+  // The Masthead badge (NotificationBell) renders on every screen, not just this one — a
+  // friend/haus/borrow request that arrives while the user is browsing elsewhere needs to
+  // show up without them having to open this screen first (which is the only other thing
+  // that calls refreshRequests, via its own useFocusEffect).
+  useEffect(() => {
+    if (!userId) return;
+    const interval = setInterval(() => { refreshRequests(); }, 20000);
+    return () => clearInterval(interval);
+  }, [userId, refreshRequests]);
+
   const resolveLocally = useCallback((id: string) => {
     setRows((prev) => prev.map((r) => (r.id === id ? { ...r, read: true, resolved: true } : r)));
   }, []);

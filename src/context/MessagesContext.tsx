@@ -96,6 +96,15 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     return () => { cancelled = true; };
   }, [refreshThreads]);
 
+  // The Masthead badge (MessagesIcon) renders on every screen, not just this one — a message
+  // that arrives while the user is browsing elsewhere needs to show up without them having to
+  // open Messages first.
+  useEffect(() => {
+    if (!userId) return;
+    const interval = setInterval(() => { refreshThreads(); }, 20000);
+    return () => clearInterval(interval);
+  }, [userId, refreshThreads]);
+
   function getThread(id: string): Thread | undefined {
     return threads.find((t) => t.id === id);
   }

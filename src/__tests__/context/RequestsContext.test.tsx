@@ -141,3 +141,38 @@ describe('responding to a haus_invite', () => {
     expect(mockAcceptHausInvite).not.toHaveBeenCalled();
   });
 });
+
+describe('background refresh', () => {
+  // The Masthead badge (NotificationBell) is rendered on every screen, not just the
+  // Requests screen — before this, requests only ever loaded once on mount, so a friend
+  // request that arrived while the user was browsing elsewhere never showed up until they
+  // happened to open the Requests screen itself (whose own useFocusEffect calls
+  // refreshRequests). Polling is what makes the badge actually live.
+  beforeEach(() => { jest.useFakeTimers(); });
+  afterEach(() => { jest.useRealTimers(); });
+
+  it('refetches notifications again on its own, without a screen focus/mount triggering it', async () => {
+    mockFetchNotifications.mockResolvedValue([]);
+    render(<RequestsProvider><Capture /></RequestsProvider>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    expect(mockFetchNotifications).toHaveBeenCalledTimes(1);
+
+    mockFetchNotifications.mockResolvedValue([hausInviteRow()]);
+    await act(async () => { jest.advanceTimersByTime(30000); await Promise.resolve(); await Promise.resolve(); });
+
+    expect(mockFetchNotifications.mock.calls.length).toBeGreaterThan(1);
+    expect(ctx.requests).toHaveLength(1);
+  });
+
+  it('stops polling once unmounted', async () => {
+    mockFetchNotifications.mockResolvedValue([]);
+    const { unmount } = render(<RequestsProvider><Capture /></RequestsProvider>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const callsAtUnmount = mockFetchNotifications.mock.calls.length;
+
+    unmount();
+    await act(async () => { jest.advanceTimersByTime(120000); });
+
+    expect(mockFetchNotifications.mock.calls.length).toBe(callsAtUnmount);
+  });
+});
