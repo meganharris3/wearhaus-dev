@@ -145,6 +145,29 @@ describe('fetchFeedItems', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ITEM_SELECT (shared by every query in this file)
+// ---------------------------------------------------------------------------
+describe('owner embed', () => {
+  it('qualifies the items→users embed with the FK name, not a bare "users(...)"', async () => {
+    // Regression test: a bare `owner:users(...)` embed relies on PostgREST auto-detecting the
+    // single relationship between items and users. If a second FK from items to users ever
+    // exists (e.g. a duplicate constraint from a migration applied twice), PostgREST can no
+    // longer disambiguate and every query using this embed fails with "Could not embed because
+    // more than one relationship was found for 'items' and 'users'" — confirmed live against a
+    // real project in exactly this state. Qualifying the embed with the constraint name makes
+    // the query unambiguous regardless of how many FKs exist.
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchFeedItems();
+
+    const selectArg = chain.select.mock.calls[0][0] as string;
+    expect(selectArg).toContain('owner:users!items_owner_id_fkey(');
+    expect(selectArg).not.toMatch(/owner:users\(/);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // searchItems
 // ---------------------------------------------------------------------------
 describe('searchItems', () => {

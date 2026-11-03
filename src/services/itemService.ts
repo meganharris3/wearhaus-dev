@@ -8,7 +8,7 @@ const ITEM_SELECT = `
   condition, occasion_tags,
   status, location_label, description, created_at,
   visibility, haus_visibility,
-  owner:users(id, display_name, avatar_url, rating, university)
+  owner:users!items_owner_id_fkey(id, display_name, avatar_url, rating, university)
 `;
 
 export async function fetchFeedItems(category?: string, opts: PageOpts = {}): Promise<Item[]> {

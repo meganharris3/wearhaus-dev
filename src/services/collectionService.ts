@@ -32,7 +32,7 @@ export async function fetchCollectionsForHaus(hausId: string): Promise<HausColle
 export async function fetchCollectionItems(collectionId: string): Promise<Item[]> {
   const { data, error } = await supabase
     .from('haus_collection_items')
-    .select(`item:items(id, owner_id, name, photo_url, category, size_label, price_per_day, status, location_label, owner:users(id, display_name, avatar_url))`)
+    .select(`item:items(id, owner_id, name, photo_url, category, size_label, price_per_day, status, location_label, owner:users!items_owner_id_fkey(id, display_name, avatar_url))`)
     .eq('collection_id', collectionId);
 
   if (error) throw new Error(error.message);

@@ -65,6 +65,20 @@ describe('fetchCollectionItems', () => {
     expect(result).toHaveLength(1);
     expect(result[0].name).toBe('Denim Jacket');
   });
+
+  it('qualifies the nested items→users embed with the FK name, not a bare "users(...)"', async () => {
+    // Same ambiguity as itemService.ts's ITEM_SELECT (see that test for the full story): a bare
+    // users(...) embed relies on PostgREST auto-detecting a single items→users relationship,
+    // which breaks with "more than one relationship was found" if a second FK ever exists.
+    const chain = makeChain({ data: [], error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await fetchCollectionItems('c1');
+
+    const selectArg = chain.select.mock.calls[0][0] as string;
+    expect(selectArg).toContain('owner:users!items_owner_id_fkey(');
+    expect(selectArg).not.toMatch(/owner:users\(/);
+  });
 });
 
 describe('createCollection', () => {
