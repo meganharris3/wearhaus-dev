@@ -62,8 +62,8 @@ const makeItem = (overrides: Partial<Item>): Item => ({
   id: 'x',
   owner_id: 'stranger',
   name: 'Item',
-  category: 'dress',
-  size_label: 'M',
+  category: ['dress'],
+  size_label: ['M'],
   price_per_day: 800,
   status: 'available',
   location_label: 'NYU',
@@ -232,5 +232,23 @@ describe('Explore campus audience', () => {
     // No tap on the pill — it should already be filtered to campus members on arrival.
     expect(shown('Classmate Jacket')).toBe(true);
     expect(shown('Public Dress')).toBe(false);
+  });
+});
+
+describe('Explore size filter (multi-select items)', () => {
+  it('matches an item if any one of its sizes is selected, not just an exact single match', async () => {
+    // size_label is an array since 016_multi_select_item_fields.sql — an item listed in
+    // multiple sizes should show up under a filter for any one of them, not require every
+    // size on the item to be selected.
+    await renderWith([
+      makeItem({ id: '1', name: 'Two Size Dress', size_label: ['S', 'M'] }),
+      makeItem({ id: '2', name: 'Large Only Coat', size_label: ['L'] }),
+    ]);
+
+    await act(async () => { fireEvent.press(screen.getByText('SIZE')); });
+    await act(async () => { fireEvent.press(screen.getByText('M')); });
+
+    expect(shown('Two Size Dress')).toBe(true);
+    expect(shown('Large Only Coat')).toBe(false);
   });
 });

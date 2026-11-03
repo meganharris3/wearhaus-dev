@@ -21,7 +21,8 @@ supabase/
 │   ├── 012_add_boards.sql                        # boards, board_items
 │   ├── 013_add_messages.sql                      # threads, messages, read tracking
 │   ├── 014_add_interactions_and_notifications.sql # favorites, comments, notifications + triggers
-│   └── 015_add_campus_otp.sql                     # campus_otp_verifications, send/verify RPCs
+│   ├── 015_add_campus_otp.sql                     # campus_otp_verifications, send/verify RPCs
+│   └── 016_multi_select_item_fields.sql           # items.category/size_label: text -> text[]
 ├── seed.sql                         # Test data (dev/preview only)
 ├── monitoring.sql                   # Health check views
 └── README.md                        # This file
@@ -47,14 +48,14 @@ cat supabase/migrations/001_initial_schema.sql | pbcopy
 cat supabase/migrations/002_security_fixes.sql | pbcopy
 # Paste in SQL Editor, run
 
-# Steps 3-15: repeat for 003 ... 015, strictly in numeric order
+# Steps 3-16: repeat for 003 ... 016, strictly in numeric order
 
 # Last: run seed (optional, dev only — after ALL migrations)
 cat supabase/seed.sql | pbcopy
 # Paste in SQL Editor, run
 ```
 
-Apply migrations **in numeric order** — later files depend on earlier ones (e.g. 013 references `items`, 014 references `friendships` and `messages`). Migrations 010–015 only add objects or repair data; none drops or alters an existing column.
+Apply migrations **in numeric order** — later files depend on earlier ones (e.g. 013 references `items`, 014 references `friendships` and `messages`). Migrations 010–015 only add objects or repair data; none drops or alters an existing column. **016 is the exception** — it changes `items.category`/`items.size_label` from `text` to `text[]`, converting existing values in place (not a destructive drop/recreate, but back up first if you're touching a project with real data you care about).
 
 Migration 015 also needs a secret set once per project, in the SQL Editor (never commit the real key to a migration file):
 ```sql

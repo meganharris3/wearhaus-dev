@@ -44,8 +44,8 @@ const localItem = (overrides: Partial<Item> = {}): Item => ({
   id: '1792615022608', // the bug: a client-side Date.now() string, not a uuid
   owner_id: 'me',
   name: 'Denim Jacket',
-  category: 'jacket',
-  size_label: 'M',
+  category: ['jacket'],
+  size_label: ['M'],
   price_per_day: 1200,
   status: 'available',
   location_label: 'NYU',

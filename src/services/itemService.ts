@@ -21,7 +21,7 @@ export async function fetchFeedItems(category?: string, opts: PageOpts = {}): Pr
     .order('id')
     .range(from, to);
   if (category && category !== 'All') {
-    query = query.ilike('category', `%${category}%`);
+    query = query.contains('category', [category]);
   }
   const { data, error } = await query;
   if (error) throw new Error(error.message);
@@ -42,8 +42,8 @@ export async function searchItems(params: {
     .order('id')
     .range(from, to);
   if (params.query)    q = q.ilike('name', `%${params.query}%`);
-  if (params.size)     q = q.eq('size_label', params.size);
-  if (params.category) q = q.ilike('category', `%${params.category}%`);
+  if (params.size)     q = q.contains('size_label', [params.size]);
+  if (params.category) q = q.contains('category', [params.category]);
   if (params.maxPrice) q = q.lte('price_per_day', params.maxPrice);
   const { data, error } = await q;
   if (error) throw new Error(error.message);

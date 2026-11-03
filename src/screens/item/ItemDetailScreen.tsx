@@ -171,17 +171,19 @@ export default function ItemDetailScreen({ route }: Props) {
           <View style={styles.priceRow}>
             <Text style={styles.price}>{priceFormatted}</Text>
             <View style={styles.sizeBadge}>
-              <Text style={styles.sizeBadgeText}>{item.size_label}</Text>
+              <Text style={styles.sizeBadgeText}>{item.size_label?.join(', ')}</Text>
             </View>
           </View>
           <Text style={styles.location}>{item.location_label}</Text>
           <View style={styles.divider} />
 
-          {(item.size_label || item.condition || item.occasion_tags?.length) && (
+          {(item.size_label?.length || item.condition || item.occasion_tags?.length) && (
             <>
               <Text style={styles.descriptionLabel}>SIZE & CONDITION</Text>
               <View style={styles.tagRow}>
-                {item.size_label && <View style={styles.tag}><Text style={styles.tagText}>{item.size_label}</Text></View>}
+                {item.size_label?.map((s) => (
+                  <View key={s} style={styles.tag}><Text style={styles.tagText}>{s}</Text></View>
+                ))}
                 {item.condition   && <View style={styles.tag}><Text style={styles.tagText}>{item.condition}</Text></View>}
                 {item.occasion_tags?.map((tag) => (
                   <View key={tag} style={styles.tag}><Text style={styles.tagText}>{tag}</Text></View>

@@ -13,7 +13,7 @@
 /** Creates a chainable builder whose final resolution is `result`. */
 function makeChain(result: { data: unknown; error: unknown }) {
   const chain: any = {};
-  const chainMethods = ['select', 'eq', 'ilike', 'order', 'limit', 'range', 'lte', 'single', 'in'];
+  const chainMethods = ['select', 'eq', 'ilike', 'contains', 'order', 'limit', 'range', 'lte', 'single', 'in'];
 
   chainMethods.forEach((m) => {
     chain[m] = jest.fn().mockReturnValue(chain);
@@ -57,8 +57,8 @@ const makeItem = (overrides: Partial<Item> = {}): Item => ({
   id:             '1',
   owner_id:       'u1',
   name:           'Test Dress',
-  category:       'dress',
-  size_label:     'S',
+  category:       ['dress'],
+  size_label:     ['S'],
   price_per_day:  800,
   status:         'available',
   location_label: '0.3 mi · NYU',
@@ -87,7 +87,7 @@ describe('fetchFeedItems', () => {
     await fetchFeedItems('Dresses', { limit: 10, offset: 20 });
 
     expect(chain.range).toHaveBeenCalledWith(20, 29);
-    expect(chain.ilike).toHaveBeenCalledWith('category', '%Dresses%');
+    expect(chain.contains).toHaveBeenCalledWith('category', ['Dresses']);
   });
 
   it('returns items from Supabase on success', async () => {
@@ -121,26 +121,25 @@ describe('fetchFeedItems', () => {
 
     await fetchFeedItems('dress');
 
-    // ilike should have been called with the category value
-    expect(chain.ilike).toHaveBeenCalledWith('category', '%dress%');
+    expect(chain.contains).toHaveBeenCalledWith('category', ['dress']);
   });
 
-  it('does not apply ilike filter when category is "All"', async () => {
+  it('does not apply a category filter when category is "All"', async () => {
     const chain = makeChain({ data: [], error: null });
     mockFrom.mockReturnValue(chain);
 
     await fetchFeedItems('All');
 
-    expect(chain.ilike).not.toHaveBeenCalled();
+    expect(chain.contains).not.toHaveBeenCalled();
   });
 
-  it('does not apply ilike filter when category is undefined', async () => {
+  it('does not apply a category filter when category is undefined', async () => {
     const chain = makeChain({ data: [], error: null });
     mockFrom.mockReturnValue(chain);
 
     await fetchFeedItems(undefined);
 
-    expect(chain.ilike).not.toHaveBeenCalled();
+    expect(chain.contains).not.toHaveBeenCalled();
   });
 });
 
@@ -208,7 +207,7 @@ describe('searchItems', () => {
 
     await searchItems({ size: 'S' });
 
-    expect(chain.eq).toHaveBeenCalledWith('size_label', 'S');
+    expect(chain.contains).toHaveBeenCalledWith('size_label', ['S']);
   });
 
   it('applies category filter', async () => {
@@ -217,7 +216,7 @@ describe('searchItems', () => {
 
     await searchItems({ category: 'jacket' });
 
-    expect(chain.ilike).toHaveBeenCalledWith('category', '%jacket%');
+    expect(chain.contains).toHaveBeenCalledWith('category', ['jacket']);
   });
 
   it('applies maxPrice filter', async () => {

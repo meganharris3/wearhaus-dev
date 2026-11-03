@@ -259,7 +259,7 @@ export default function ExploreScreen() {
     }
 
     if (filters.size.length > 0) {
-      items = items.filter((i) => filters.size.includes(i.size_label));
+      items = items.filter((i) => i.size_label.some((label) => filters.size.includes(label)));
     }
 
     if (filters.price.length > 0) {
@@ -277,15 +277,17 @@ export default function ExploreScreen() {
 
     if (filters.style.length > 0) {
       items = items.filter((i) =>
-        filters.style.some((s) => {
-          const cat = i.category.toLowerCase();
-          if (s === 'Dresses')     return cat === 'dress';
-          if (s === 'Outerwear')   return ['jacket', 'coat', 'blazer'].includes(cat);
-          if (s === 'Tops')        return ['top', 'blouse', 'shirt'].includes(cat);
-          if (s === 'Bottoms')     return ['pants', 'shorts', 'skirt', 'jeans'].includes(cat);
-          if (s === 'Shoes')       return cat === 'shoes';
-          if (s === 'Accessories') return cat === 'accessories';
-          return false;
+        i.category.some((rawCat) => {
+          const cat = rawCat.toLowerCase();
+          return filters.style.some((s) => {
+            if (s === 'Dresses')     return cat === 'dress';
+            if (s === 'Outerwear')   return ['jacket', 'coat', 'blazer'].includes(cat);
+            if (s === 'Tops')        return ['top', 'blouse', 'shirt'].includes(cat);
+            if (s === 'Bottoms')     return ['pants', 'shorts', 'skirt', 'jeans'].includes(cat);
+            if (s === 'Shoes')       return cat === 'shoes';
+            if (s === 'Accessories') return cat === 'accessories';
+            return false;
+          });
         }),
       );
     }

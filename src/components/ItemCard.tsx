@@ -89,7 +89,7 @@ function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
             </Text>
             <View style={styles.priceRow}>
               <Text style={styles.price}>{priceFormatted}</Text>
-              <Text style={styles.size}>{item.size_label}</Text>
+              <Text style={styles.size}>{item.size_label?.join(', ')}</Text>
             </View>
             <Text style={styles.location} numberOfLines={1}>{item.location_label}</Text>
           </View>

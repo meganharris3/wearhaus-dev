@@ -77,7 +77,7 @@ export default function AddItemsToBoardScreen() {
         {/* Item info */}
         <View style={styles.cellInfo}>
           <Text numberOfLines={1} style={styles.cellName}>{item.name}</Text>
-          <Text style={styles.cellSub}>{item.size_label}</Text>
+          <Text style={styles.cellSub}>{item.size_label?.join(', ')}</Text>
         </View>
         {/* Selected overlay */}
         {isSelected && (

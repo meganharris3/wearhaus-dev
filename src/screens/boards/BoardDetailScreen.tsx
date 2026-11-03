@@ -85,7 +85,7 @@ function ItemListRow({
       </View>
       <View style={styles.listInfo}>
         <Text style={styles.listName} numberOfLines={1}>{item.name}</Text>
-        <Text style={styles.listSub}>{item.size_label} · ${(item.price_per_day / 100).toFixed(0)}/day</Text>
+        <Text style={styles.listSub}>{item.size_label?.join(', ')} · ${(item.price_per_day / 100).toFixed(0)}/day</Text>
       </View>
       <Pressable onPress={openMenu} hitSlop={10} style={styles.menuBtn}>
         <Ionicons name="ellipsis-vertical" size={16} color={theme.colors.muted} />

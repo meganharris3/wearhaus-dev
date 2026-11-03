@@ -43,7 +43,7 @@ type RentalRow = {
   accepted_at: string | null;
   borrower_id: string;
   lender_id: string;
-  item: { id: string; name: string; size_label: string | null; condition: string | null } | null;
+  item: { id: string; name: string; size_label: string[] | null; condition: string | null } | null;
   borrower: { id: string; display_name: string } | null;
   lender:   { id: string; display_name: string } | null;
 };
@@ -68,7 +68,7 @@ function rowToBorrowRecord(row: RentalRow): BorrowRecord {
     threadId:           row.thread_id ?? row.id,
     rating:             row.rating ?? null,
     ratingComment:      row.rating_comment ?? undefined,
-    itemSize:           item?.size_label ?? undefined,
+    itemSize:           item?.size_label?.join(', ') || undefined,
     itemCondition:      item?.condition ?? undefined,
     pickupMethod:       row.pickup_method ?? undefined,
     acceptedAt:         row.accepted_at ?? undefined,
@@ -93,7 +93,7 @@ function rowToLendRecord(row: RentalRow): LendRecord {
     startDate:           row.start_date,
     endDate:             row.end_date,
     threadId:            row.thread_id ?? row.id,
-    itemSize:            item?.size_label ?? undefined,
+    itemSize:            item?.size_label?.join(', ') || undefined,
     itemCondition:       item?.condition ?? undefined,
     pickupMethod:        row.pickup_method ?? undefined,
     acceptedAt:          row.accepted_at ?? undefined,

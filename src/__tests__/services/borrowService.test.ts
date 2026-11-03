@@ -25,7 +25,7 @@ const rental = (overrides: Record<string, unknown> = {}) => ({
   start_date: '2026-01-01', end_date: '2026-01-03',
   thread_id: null, rating: null, rating_comment: null, pickup_method: null, accepted_at: null,
   borrower_id: 'me', lender_id: 'u2',
-  item: { id: 'i1', name: 'Denim Jacket', size_label: 'M', condition: 'Good' },
+  item: { id: 'i1', name: 'Denim Jacket', size_label: ['M'], condition: 'Good' },
   borrower: { id: 'me', display_name: 'Me Myself' },
   lender: { id: 'u2', display_name: 'Maya Chen' },
   ...overrides,

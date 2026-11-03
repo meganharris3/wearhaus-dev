@@ -88,7 +88,7 @@ export default function DatePickerScreen({ route, navigation }: Props) {
           borrowerFirstName: (profile?.display_name ?? 'Someone').split(' ')[0],
           item: {
             name: item.name,
-            size: item.size_label ?? '',
+            size: item.size_label?.join(', ') ?? '',
             condition: item.condition ?? 'Good condition',
             thumbColor: '#D8D4C8',
             photo: item.photo_url ?? null,
@@ -222,7 +222,7 @@ function BorrowerItemStrip({ item }: { item: import('../../types').Item }) {
       <View style={stripStyles.info}>
         <Text style={stripStyles.name} numberOfLines={1}>{item.name.toUpperCase()}</Text>
         <Text style={stripStyles.meta}>
-          {[item.owner?.display_name, item.size_label, item.location_label]
+          {[item.owner?.display_name, item.size_label?.join(', '), item.location_label]
             .filter(Boolean).join(' · ')}
         </Text>
       </View>

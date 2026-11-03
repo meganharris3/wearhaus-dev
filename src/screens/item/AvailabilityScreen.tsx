@@ -183,7 +183,7 @@ function ItemStrip({ item }: { item: import('../../types').Item }) {
       }
       <View style={stripStyles.info}>
         <Text style={stripStyles.name} numberOfLines={1}>{item.name.toUpperCase()}</Text>
-        <Text style={stripStyles.meta}>{item.size_label}</Text>
+        <Text style={stripStyles.meta}>{item.size_label?.join(', ')}</Text>
       </View>
       <Text style={stripStyles.price}>{price}</Text>
     </View>

@@ -463,7 +463,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
             <View style={styles.itemBarThumb} />
             <View style={{ flex: 1 }}>
               <Text style={styles.itemBarName}>{displayItem.name.toUpperCase()}</Text>
-              <Text style={styles.itemBarMeta}>{displayItem.size_label} · {displayItem.category}</Text>
+              <Text style={styles.itemBarMeta}>{displayItem.size_label?.join(', ')} · {displayItem.category?.join(', ')}</Text>
             </View>
             <Text style={styles.itemBarPrice}>${(displayItem.price_per_day / 100).toFixed(2)}/day</Text>
           </View>

@@ -226,7 +226,7 @@ describe('ProfileScreen save', () => {
 describe('ProfileScreen favorites', () => {
   it('shows items I favorited that belong to other people', async () => {
     mockFavoritedItems = [
-      { id: 'i1', owner_id: 'u2', name: 'Velvet Blazer', category: 'jacket', size_label: 'M', price_per_day: 1000, status: 'available', location_label: 'NYU' },
+      { id: 'i1', owner_id: 'u2', name: 'Velvet Blazer', category: ['jacket'], size_label: ['M'], price_per_day: 1000, status: 'available', location_label: 'NYU' },
     ];
     render(<ProfileScreen />);
     await settle();
@@ -236,7 +236,7 @@ describe('ProfileScreen favorites', () => {
 
   it('excludes my own items from the favorites section', async () => {
     mockFavoritedItems = [
-      { id: 'i1', owner_id: 'u1', name: 'My Own Jacket', category: 'jacket', size_label: 'M', price_per_day: 1000, status: 'available', location_label: 'NYU' },
+      { id: 'i1', owner_id: 'u1', name: 'My Own Jacket', category: ['jacket'], size_label: ['M'], price_per_day: 1000, status: 'available', location_label: 'NYU' },
     ];
     render(<ProfileScreen />);
     await settle();

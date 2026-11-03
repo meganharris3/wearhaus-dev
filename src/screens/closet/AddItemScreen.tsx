@@ -61,13 +61,13 @@ export default function AddItemScreen() {
   });
   const [name, setName]               = useState(() => existingItem?.name ?? '');
   const [description, setDescription] = useState(() => existingItem?.description ?? '');
-  const [category, setCategory]       = useState<string | null>(() => existingItem?.category ?? null);
-  const [size, setSize]               = useState<string | null>(() => existingItem?.size_label ?? null);
+  const [category, setCategory]       = useState<string[]>(() => existingItem?.category ?? []);
+  const [size, setSize]               = useState<string[]>(() => existingItem?.size_label ?? []);
   const [condition, setCondition]     = useState<string | null>(() => existingItem?.condition ?? null);
   const [occasionTags, setOccasionTags] = useState<string[]>(() => existingItem?.occasion_tags ?? []);
   const [customCategories, setCustomCategories] = useState<string[]>(() => {
-    if (!existingItem?.category) return [];
-    return CATEGORIES.includes(existingItem.category) ? [] : [existingItem.category];
+    const existing = existingItem?.category ?? [];
+    return existing.filter((tag) => !CATEGORIES.includes(tag));
   });
   const [customOccasions, setCustomOccasions] = useState<string[]>(() => {
     const existing = existingItem?.occasion_tags ?? [];
@@ -153,23 +153,37 @@ export default function AddItemScreen() {
     );
   }
 
+  function toggleCategory(tag: string) {
+    setCategory((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  }
+
+  function toggleSize(tag: string) {
+    setSize((prev) =>
+      prev.includes(tag) ? prev.filter((t) => t !== tag) : [...prev, tag],
+    );
+  }
+
   function addCustomCategory() {
     const tag = categoryInput.trim();
     if (!tag) return;
     const all = [...CATEGORIES, ...customCategories];
     if (all.some((t) => t.toLowerCase() === tag.toLowerCase())) {
-      setCategory(tag);
+      if (!category.includes(tag)) {
+        setCategory((prev) => [...prev, tag]);
+      }
       setCategoryInput('');
       return;
     }
     setCustomCategories((prev) => [...prev, tag]);
-    setCategory(tag);
+    setCategory((prev) => [...prev, tag]);
     setCategoryInput('');
   }
 
   function removeCustomCategory(tag: string) {
     setCustomCategories((prev) => prev.filter((t) => t !== tag));
-    if (category === tag) setCategory(null);
+    setCategory((prev) => prev.filter((t) => t !== tag));
   }
 
   function addCustomOccasion() {
@@ -208,8 +222,8 @@ export default function AddItemScreen() {
       description,
       photo_url:       allUrls[0],
       photo_urls:      allUrls,
-      category:        category ?? 'other',
-      size_label:      size ?? '—',
+      category:        category.length > 0 ? category : ['other'],
+      size_label:      size.length > 0 ? size : ['—'],
       price_per_day:   listForRental && pricePerDay ? Math.round(parseFloat(pricePerDay) * 100) : 0,
       list_for_rental: listForRental,
       max_duration:    listForRental ? maxDuration : undefined,
@@ -243,8 +257,8 @@ export default function AddItemScreen() {
           description,
           photo_url:       allUrls[0],
           photo_urls:      allUrls,
-          category:        category ?? existingItem.category ?? 'other',
-          size_label:      size ?? existingItem.size_label ?? '—',
+          category:        category.length > 0 ? category : (existingItem.category ?? ['other']),
+          size_label:      size.length > 0 ? size : (existingItem.size_label ?? ['—']),
           price_per_day:   listForRental && pricePerDay
             ? Math.round(parseFloat(pricePerDay) * 100)
             : 0,
@@ -385,11 +399,11 @@ export default function AddItemScreen() {
         <Text style={styles.fieldLabel}>CATEGORY</Text>
         <View style={styles.chipWrap}>
           {CATEGORIES.map((c) => (
-            <Chip key={c} label={c} selected={category === c} onPress={() => setCategory(category === c ? null : c)} />
+            <Chip key={c} label={c} selected={category.includes(c)} onPress={() => toggleCategory(c)} />
           ))}
           {customCategories.map((c) => (
-            <CustomChip key={c} label={c} selected={category === c}
-              onPress={() => setCategory(category === c ? null : c)}
+            <CustomChip key={c} label={c} selected={category.includes(c)}
+              onPress={() => toggleCategory(c)}
               onRemove={() => removeCustomCategory(c)} />
           ))}
         </View>
@@ -406,7 +420,7 @@ export default function AddItemScreen() {
         <Text style={styles.fieldLabel}>SIZE</Text>
         <View style={styles.chipWrap}>
           {SIZES.map((s) => (
-            <Chip key={s} label={s} selected={size === s} onPress={() => setSize(size === s ? null : s)} />
+            <Chip key={s} label={s} selected={size.includes(s)} onPress={() => toggleSize(s)} />
           ))}
         </View>
 

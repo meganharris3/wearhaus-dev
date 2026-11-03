@@ -31,8 +31,8 @@ const makeItem = (overrides: Partial<Item> = {}): Item => ({
   id:             '1',
   owner_id:       'u1',
   name:           'Silk Slip Dress',
-  category:       'dress',
-  size_label:     'S',
+  category:       ['dress'],
+  size_label:     ['S'],
   price_per_day:  800,
   status:         'available',
   location_label: '0.3 mi · NYU',
@@ -64,7 +64,7 @@ describe('ItemCard', () => {
   });
 
   it('renders size label', () => {
-    render(<ItemCard item={makeItem({ size_label: 'M' })} onPress={jest.fn()} />);
+    render(<ItemCard item={makeItem({ size_label: ['M'] })} onPress={jest.fn()} />);
     expect(screen.getByText('M')).toBeTruthy();
   });
 

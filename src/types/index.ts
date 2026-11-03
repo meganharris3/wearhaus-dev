@@ -32,8 +32,8 @@ export interface Item {
   description?: string;
   photo_url?: string;
   photo_urls?: string[];
-  category: string;
-  size_label: string;
+  category: string[];
+  size_label: string[];
   price_per_day: number;
   price_per_week?: number;
   list_for_rental?: boolean;
