@@ -42,6 +42,7 @@ export default function HomeScreen() {
   const [feedLoading, setFeedLoading] = useState(true);
   const [campusHaus, setCampusHaus] = useState<Haus | null>(null);
   const [campusStripActive, setCampusStripActive] = useState(false);
+  const [hausesStripActive, setHausesStripActive] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -177,6 +178,34 @@ export default function HomeScreen() {
                 </View>
               </Pressable>
             )}
+
+            {/* Hauses strip — always visible, unlike the campus one above. Same treatment as
+                the campus strip (yellow fill, ink border, inset icon tile, hover shadow) and
+                the same row height (identical icon size / padding / font sizes). */}
+            <Pressable
+              style={({ pressed }) => [
+                styles.hausesStrip,
+                (pressed || hausesStripActive) && styles.hausesStripActive,
+              ]}
+              onPress={() => navigation.navigate('Hauses')}
+              onHoverIn={() => setHausesStripActive(true)}
+              onHoverOut={() => setHausesStripActive(false)}
+              accessibilityRole="button"
+              accessibilityLabel="Hauses, browse or start a shared closet"
+            >
+              <View style={styles.hausesStripBorder}>
+                <View style={styles.hausesStripInner}>
+                  <View style={styles.hausesIconTile}>
+                    <Ionicons name="home-outline" size={20} color={theme.colors.ink} />
+                  </View>
+                  <View style={styles.hausesTextBlock}>
+                    <Text style={styles.hausesStripTitle} numberOfLines={1}>Hauses</Text>
+                    <Text style={styles.hausesStripSub} numberOfLines={1}>Browse yours, or start a new one</Text>
+                  </View>
+                  <Ionicons name="arrow-forward" size={20} color={theme.colors.ink} />
+                </View>
+              </View>
+            </Pressable>
 
             {/* Section label */}
             <View style={styles.dividerRow}>
@@ -350,6 +379,64 @@ const styles = StyleSheet.create({
     fontFamily: theme.fonts.interRegular,
     fontSize: 11,
     color: '#5A5A00',
+  },
+
+  // Hauses strip — lighter than the yellow campus card on purpose: this one can sit directly
+  // below it (campus is gated on campus_verified, this isn't), so matching treatment would
+  // read as two of the same banner stacked rather than two distinct entry points.
+  // Hauses strip — same treatment as the campus strip (yellow fill, ink border, inset icon
+  // tile, hover shadow) and the same row height (identical icon size/padding/font sizes).
+  hausesStrip: {
+    marginHorizontal: 18,
+    marginBottom: 12,
+    borderRadius: 12,
+  },
+  hausesStripActive: {
+    transform: [{ translateX: -2 }, { translateY: -2 }],
+    shadowColor: '#000000',
+    shadowOffset: { width: 3, height: 3 },
+    shadowOpacity: 1,
+    shadowRadius: 0,
+    elevation: 4,
+  },
+  hausesStripBorder: {
+    borderWidth: 1,
+    borderColor: theme.colors.ink,
+    borderRadius: 12,
+    overflow: 'hidden',
+  },
+  hausesStripInner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: theme.colors.yellow,
+    borderBottomWidth: 1,
+    borderBottomColor: '#C8C820',
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  hausesIconTile: {
+    width: 32,
+    height: 32,
+    borderRadius: 9,
+    backgroundColor: 'rgba(0,0,0,0.06)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hausesTextBlock: { flex: 1, minWidth: 0 },
+  hausesStripTitle: {
+    fontFamily: theme.fonts.barlowExtraBold,
+    fontSize: 13,
+    letterSpacing: 0.4,
+    textTransform: 'uppercase',
+    color: theme.colors.yellowText,
+    lineHeight: 16,
+  },
+  hausesStripSub: {
+    fontFamily: theme.fonts.interRegular,
+    fontSize: 11,
+    color: '#5A5A00',
+    marginTop: 2,
   },
 
   // FAB — bottom offset is set inline (base 24 + the safe-area inset)
