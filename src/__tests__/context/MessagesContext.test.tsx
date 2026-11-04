@@ -14,13 +14,15 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 
 const mockFetchThreads = jest.fn();
+const mockUpdateMessagePayload = jest.fn();
+const mockFetchMessages = jest.fn();
 jest.mock('../../services/messageService', () => ({
   fetchThreads: (...args: unknown[]) => mockFetchThreads(...args),
   fetchThread: jest.fn(),
-  fetchMessages: jest.fn(),
+  fetchMessages: (...args: unknown[]) => mockFetchMessages(...args),
   findOrCreateThread: jest.fn(),
   sendMessage: jest.fn(),
-  updateMessagePayload: jest.fn(),
+  updateMessagePayload: (...args: unknown[]) => mockUpdateMessagePayload(...args),
   updateThreadStatus: jest.fn(),
   markThreadRead: jest.fn(),
 }));
@@ -91,5 +93,67 @@ describe('background refresh', () => {
     await act(async () => { jest.advanceTimersByTime(120000); });
 
     expect(mockFetchThreads).not.toHaveBeenCalled();
+  });
+});
+
+describe('acceptCounterOffer', () => {
+  const request = {
+    id: 'm1', threadId: 't1', type: 'borrow_request', senderId: 'me', timestamp: '2026-11-01T00:00:00Z',
+    payload: {
+      lenderId: 'u2', lenderFirstName: 'Jordan', borrowerId: 'me', borrowerFirstName: 'Megan',
+      item: { name: 'Denim Jacket', size: 'M', condition: 'Good', thumbColor: '#ddd', photo: null },
+      startDate: 'Nov 3', endDate: 'Nov 5', startDateISO: '2026-11-03', endDateISO: '2026-11-05',
+      itemId: 'i1', days: 3, pricePerDay: 10, pickupMethod: 'Pickup', total: 32.1, status: 'pending',
+    },
+  };
+  const counter = {
+    id: 'm2', threadId: 't1', type: 'counter_offer', senderId: 'u2', timestamp: '2026-11-01T01:00:00Z',
+    payload: {
+      pricePerDay: 800, dates: { start: 'Nov 10', end: 'Nov 10' },
+      startDateISO: '2026-11-10', endDateISO: '2026-11-10',
+    },
+  };
+
+  async function renderWith(messages: unknown[]) {
+    mockFetchThreads.mockResolvedValue([makeThread()]);
+    mockFetchMessages.mockResolvedValue(messages);
+    mockUpdateMessagePayload.mockResolvedValue(undefined);
+    render(<MessagesProvider><Capture /></MessagesProvider>);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    await act(async () => { await ctx.openThread('t1'); });
+  }
+
+  it('rewrites the borrow request with the countered terms, accepted', async () => {
+    await renderWith([request, counter]);
+    await act(async () => { await ctx.acceptCounterOffer('t1', 'm2'); });
+
+    const [id, payload] = mockUpdateMessagePayload.mock.calls[0];
+    expect(id).toBe('m1');
+    expect(payload).toMatchObject({
+      status: 'accepted', pricePerDay: 8, days: 1,
+      startDateISO: '2026-11-10', endDateISO: '2026-11-10',
+    });
+  });
+
+  it('marks the offer accepted, in the database and locally', async () => {
+    await renderWith([request, counter]);
+    await act(async () => { await ctx.acceptCounterOffer('t1', 'm2'); });
+
+    expect(mockUpdateMessagePayload).toHaveBeenCalledWith('m2', expect.objectContaining({ status: 'accepted' }));
+    const msgs = ctx.getThread('t1')!.messages;
+    expect((msgs.find((m) => m.id === 'm2')!.payload as { status?: string }).status).toBe('accepted');
+    expect((msgs.find((m) => m.id === 'm1')!.payload as { status?: string }).status).toBe('accepted');
+  });
+
+  it('refuses when the request was already accepted', async () => {
+    await renderWith([{ ...request, payload: { ...request.payload, status: 'accepted' } }, counter]);
+    await expect(ctx.acceptCounterOffer('t1', 'm2')).rejects.toThrow(/already accepted/);
+    expect(mockUpdateMessagePayload).not.toHaveBeenCalled();
+  });
+
+  it('refuses when there is no borrow request to apply the offer to', async () => {
+    await renderWith([counter]);
+    await expect(ctx.acceptCounterOffer('t1', 'm2')).rejects.toThrow(/no borrow request/);
+    expect(mockUpdateMessagePayload).not.toHaveBeenCalled();
   });
 });

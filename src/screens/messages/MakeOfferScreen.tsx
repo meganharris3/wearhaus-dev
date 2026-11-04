@@ -7,7 +7,7 @@ import { useMessages } from '../../context/MessagesContext';
 import WearCalendar from '../../components/WearCalendar';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { CounterOfferPayload } from '../../types';
-import { formatDateShort, addMonths } from '../../utils/dateUtils';
+import { formatDateShort, addMonths, toDateStr } from '../../utils/dateUtils';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'MakeOffer'>;
 
@@ -32,6 +32,10 @@ export default function MakeOfferScreen({ route, navigation }: Props) {
       dates: selectedStart && selectedEnd
         ? { start: formatDateShort(selectedStart), end: formatDateShort(selectedEnd) }
         : { start: '—', end: '—' },
+      ...(selectedStart && selectedEnd && {
+        startDateISO: toDateStr(selectedStart),
+        endDateISO: toDateStr(selectedEnd),
+      }),
       note: note.trim() || undefined,
     };
     setIsSending(true);

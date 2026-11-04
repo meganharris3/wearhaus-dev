@@ -170,9 +170,13 @@ export interface BorrowRequestPayload {
 }
 
 export interface CounterOfferPayload {
-  pricePerDay: number;
-  dates: { start: string; end: string };
+  pricePerDay: number;   // cents
+  dates: { start: string; end: string };  // display only
+  /** 'YYYY-MM-DD'; absent when the offer didn't change the dates (or predates this field). */
+  startDateISO?: string;
+  endDateISO?: string;
   note?: string;
+  status?: 'accepted';
 }
 
 export interface ChatMessage {

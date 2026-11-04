@@ -244,10 +244,12 @@ function CounterOfferCard({
   msg,
   thread,
   navigation,
+  onAccept,
 }: {
   msg: ChatMessage;
   thread: Thread;
   navigation: Props['navigation'];
+  onAccept: () => void;
 }) {
   const { user } = useAuth();
   const payload = msg.payload as CounterOfferPayload;
@@ -272,9 +274,12 @@ function CounterOfferCard({
           <Text style={[styles.cardValue, { flexShrink: 1 }]}>{payload.note}</Text>
         </View>
       )}
-      {!isMine && (
+      {payload.status === 'accepted' && (
+        <Text style={[styles.cardLabel, { marginTop: 8 }]}>Offer accepted</Text>
+      )}
+      {!isMine && payload.status !== 'accepted' && (
         <View style={styles.cardActions}>
-          <Pressable style={[styles.cardBtn, styles.cardBtnPrimary]} onPress={() => {}}>
+          <Pressable style={[styles.cardBtn, styles.cardBtnPrimary]} onPress={onAccept}>
             <Text style={styles.cardBtnPrimaryText}>ACCEPT</Text>
           </Pressable>
           <Pressable
@@ -314,7 +319,7 @@ function ItemMentionCard({ item }: { item: Item }) {
 
 export default function ChatThreadScreen({ route, navigation }: Props) {
   const { threadId: initialThreadId, pendingItem, pendingOtherUser } = route.params;
-  const { getThread, openThread, markRead, sendMessage, updateRequestStatus, createDirectThread } = useMessages();
+  const { getThread, openThread, markRead, sendMessage, updateRequestStatus, acceptCounterOffer, createDirectThread } = useMessages();
   const [inputText, setInputText] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId);
   const [isSending, setIsSending] = useState(false);
@@ -403,6 +408,16 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     });
   }
 
+  async function handleAcceptCounter(msg: ChatMessage) {
+    if (!activeThreadId) return;
+    try {
+      await acceptCounterOffer(activeThreadId, msg.id);
+      await sendMessage(activeThreadId, { type: 'system', text: 'Offer accepted' });
+    } catch (e) {
+      showError('Could not accept offer', e);
+    }
+  }
+
   function handleCancel(msg: ChatMessage) {
     resolveRequest(msg, 'declined', 'Request cancelled');
   }
@@ -427,7 +442,15 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
           />
         );
       case 'counter_offer':
-        return thread ? <CounterOfferCard key={msg.id} msg={msg} thread={thread} navigation={navigation} /> : null;
+        return thread ? (
+          <CounterOfferCard
+            key={msg.id}
+            msg={msg}
+            thread={thread}
+            navigation={navigation}
+            onAccept={() => handleAcceptCounter(msg)}
+          />
+        ) : null;
       default:
         return null;
     }

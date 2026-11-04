@@ -19,6 +19,7 @@ import type {
   BorrowRequestPayload,
   CounterOfferPayload,
 } from '../types';
+import { applyCounterOffer } from '../utils/counterOffer';
 
 // ─── Context Shape ─────────────────────────────────────────────────────────────
 
@@ -51,6 +52,9 @@ interface MessagesContextValue {
     messageId: string,
     status: BorrowRequestPayload['status'],
   ) => Promise<void>;
+  /** Accept a counter offer: rewrites the thread's borrow request with the countered terms and
+   *  marks it accepted (which creates the rental server-side), then marks the offer accepted. */
+  acceptCounterOffer: (threadId: string, counterMessageId: string) => Promise<void>;
 }
 
 const MessagesContext = createContext<MessagesContextValue | null>(null);
@@ -207,6 +211,38 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
     }));
   }
 
+  async function acceptCounterOffer(threadId: string, counterMessageId: string) {
+    const messages = threads.find((t) => t.id === threadId)?.messages ?? [];
+    const counter = messages.find((m) => m.id === counterMessageId);
+    if (!counter || counter.type !== 'counter_offer') return;
+    // The offer answers the latest request sent before it.
+    const request = messages
+      .slice(0, messages.indexOf(counter))
+      .reverse()
+      .find((m) => m.type === 'borrow_request');
+    if (!request) throw new Error('There is no borrow request in this chat for the offer to apply to.');
+
+    const requestPayload = request.payload as BorrowRequestPayload;
+    if (requestPayload.status === 'accepted') throw new Error('This request was already accepted.');
+    if (requestPayload.status === 'declined') throw new Error('This request was declined or cancelled.');
+
+    const nextRequest = applyCounterOffer(requestPayload, counter.payload as CounterOfferPayload);
+    const nextCounter: CounterOfferPayload = { ...(counter.payload as CounterOfferPayload), status: 'accepted' };
+    await updateMessagePayload(request.id, nextRequest);
+    await updateMessagePayload(counter.id, nextCounter);
+    setThreads((prev) => prev.map((t) => {
+      if (t.id !== threadId) return t;
+      return {
+        ...t,
+        messages: t.messages.map((m) => {
+          if (m.id === request.id) return { ...m, payload: nextRequest };
+          if (m.id === counter.id) return { ...m, payload: nextCounter };
+          return m;
+        }),
+      };
+    }));
+  }
+
   return (
     <MessagesContext.Provider
       value={{
@@ -222,6 +258,7 @@ export function MessagesProvider({ children }: { children: React.ReactNode }) {
         markRead,
         sendMessage,
         updateRequestStatus,
+        acceptCounterOffer,
       }}
     >
       {children}
