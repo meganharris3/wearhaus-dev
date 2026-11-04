@@ -11,6 +11,7 @@ import {
 } from '../../context/BorrowsContext';
 import type { BorrowRecord, LendRecord } from '../../context/BorrowsContext';
 import { useMessages } from '../../context/MessagesContext';
+import FooterTabBar from '../../components/FooterTabBar';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { ThreadParticipant } from '../../types';
 
@@ -404,6 +405,7 @@ export default function ExchangeDetailScreen() {
   const goToChat = () => nav.navigate('ChatThread', { threadId });
 
   return (
+    <View style={s.screen}>
     <ScrollView style={s.screen} showsVerticalScrollIndicator={false}>
       <PhotoHero
         exchange={exchange}
@@ -433,6 +435,8 @@ export default function ExchangeDetailScreen() {
 
       <View style={{ height: 24 }} />
     </ScrollView>
+    <FooterTabBar active="Profile" />
+    </View>
   );
 }
 

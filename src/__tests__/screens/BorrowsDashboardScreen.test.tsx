@@ -107,3 +107,9 @@ it('opens the exchange when the borrower taps an upcoming borrow', () => {
   fireEvent.press(screen.getByText('Denim Jacket'));
   expect(mockNavigate).toHaveBeenCalledWith('ExchangeDetail', { exchangeId: 'r1', mode: 'borrowing' });
 });
+
+it('shows the tab footer', () => {
+  render(<BorrowsDashboardScreen />);
+  expect(screen.getByLabelText('Closet')).toBeTruthy();
+  expect(screen.getByLabelText('Profile').props.accessibilityState).toEqual({ selected: true });
+});

@@ -2,11 +2,14 @@ import React from 'react';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
 import { Ionicons } from '@expo/vector-icons';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { theme } from '../theme';
 import HomeScreen from '../screens/home/HomeScreen';
 import ExploreScreen from '../screens/home/ExploreScreen';
 import ClosetScreen from '../screens/closet/ClosetScreen';
 import ProfileScreen from '../screens/profile/ProfileScreen';
+import {
+  TAB_ICONS, TAB_ACTIVE_COLOR, TAB_INACTIVE_COLOR, tabBarStyle, tabBarLabelStyle,
+  type TabName,
+} from './tabBarConfig';
 
 export type AppTabsParamList = {
   Home: undefined;
@@ -15,45 +18,21 @@ export type AppTabsParamList = {
   Profile: undefined;
 };
 
-type IconName = React.ComponentProps<typeof Ionicons>['name'];
-
-const ICONS: Record<string, [IconName, IconName]> = {
-  Home:    ['home',          'home-outline'],
-  Explore: ['compass',       'compass-outline'],
-  Closet:  ['shirt',         'shirt-outline'],
-  Profile: ['person-circle', 'person-circle-outline'],
-};
-
-
 const Tab = createBottomTabNavigator<AppTabsParamList>();
 
 export default function AppTabs() {
-  // On an installed PWA there's no browser chrome, so the iPhone home indicator sits right
-  // where the tab bar would otherwise end — pad past it instead of letting content hide under it.
   const insets = useSafeAreaInsets();
 
   return (
     <Tab.Navigator
       screenOptions={({ route }) => ({
         headerShown: false,
-        tabBarStyle: {
-          backgroundColor: theme.colors.ivory,
-          borderTopColor: theme.colors.ivoryMid,
-          borderTopWidth: 1.5,
-          height: 88,
-          paddingBottom: Math.max(insets.bottom, 14),
-          paddingTop: 8,
-        },
-        tabBarLabelStyle: {
-          fontFamily: theme.fonts.interRegular,
-          fontSize: 10,
-          textTransform: 'uppercase',
-          letterSpacing: 0.5,
-        },
-        tabBarActiveTintColor: theme.colors.ink,
-        tabBarInactiveTintColor: theme.colors.muted,
+        tabBarStyle: tabBarStyle(insets.bottom),
+        tabBarLabelStyle,
+        tabBarActiveTintColor: TAB_ACTIVE_COLOR,
+        tabBarInactiveTintColor: TAB_INACTIVE_COLOR,
         tabBarIcon: ({ focused, color, size }) => {
-          const icons = ICONS[route.name];
+          const icons = TAB_ICONS[route.name as TabName];
           if (!icons) return null;
           const [filled, outline] = icons;
           return <Ionicons name={focused ? filled : outline} size={size} color={color} />;

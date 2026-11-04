@@ -1,5 +1,7 @@
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import type { NavigatorScreenParams } from '@react-navigation/native';
 import AppTabs from './AppTabs';
+import type { AppTabsParamList } from './AppTabs';
 import ItemDetailScreen from '../screens/item/ItemDetailScreen';
 import ItemCommentsScreen from '../screens/item/ItemCommentsScreen';
 import AvailabilityScreen from '../screens/item/AvailabilityScreen';
@@ -35,7 +37,7 @@ import { BorrowsProvider } from '../context/BorrowsContext';
 import type { Item, Haus } from '../types';
 
 export type AppStackParamList = {
-  Tabs: undefined;
+  Tabs: NavigatorScreenParams<AppTabsParamList> | undefined;
   ItemDetail: { item: Item };
   ItemComments: { item: Item };
   Availability: { item: Item };

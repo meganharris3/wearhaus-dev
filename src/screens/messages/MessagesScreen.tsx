@@ -10,6 +10,7 @@ import { useFriends } from '../../context/FriendsContext';
 import { formatMessageTime } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Thread, ThreadStatus, Friend } from '../../types';
+import FooterTabBar from '../../components/FooterTabBar';
 
 const THUMB_COLORS = ['#E8E4D4', '#DDD8CC', '#E0D8C8', '#D8D4C4'];
 
@@ -196,6 +197,7 @@ export default function MessagesScreen() {
       </View>
 
       <FlatList
+        style={{ flex: 1 }}
         data={threads}
         keyExtractor={(t) => t.id}
         renderItem={({ item }) => <ThreadRow thread={item} />}
@@ -205,6 +207,8 @@ export default function MessagesScreen() {
           </View>
         }
       />
+
+      <FooterTabBar />
 
       <ComposeModal
         visible={composeVisible}

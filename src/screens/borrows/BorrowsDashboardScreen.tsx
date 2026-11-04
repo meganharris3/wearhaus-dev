@@ -11,6 +11,7 @@ import {
   BorrowRecord, LendRecord,
 } from '../../context/BorrowsContext';
 import { useMessages } from '../../context/MessagesContext';
+import FooterTabBar from '../../components/FooterTabBar';
 import type { ThreadParticipant } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
 
@@ -468,6 +469,7 @@ export default function BorrowsDashboardScreen() {
 
         </ScrollView>
       </SafeAreaView>
+      <FooterTabBar active="Profile" />
     </View>
   );
 }
