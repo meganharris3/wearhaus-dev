@@ -16,6 +16,9 @@ jest.mock('../../context/AuthContext', () => ({
   useAuth: () => ({ user: { id: 'borrower-1' }, profile: { display_name: 'Megan H' } }),
 }));
 
+const mockConfirm = jest.fn();
+jest.mock('../../context/ConfirmationContext', () => ({ useConfirmation: () => mockConfirm }));
+
 import DatePickerScreen from '../../screens/item/DatePickerScreen';
 import type { Item } from '../../types';
 
@@ -70,4 +73,22 @@ it('includes the item id and real YYYY-MM-DD dates in the request payload', asyn
   expect(payload.startDateISO).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   expect(payload.borrowerId).toBe('borrower-1');
   expect(payload.lenderId).toBe('lender-1');
+});
+
+it('confirms once the request is sent', async () => {
+  renderScreen();
+  fireEvent.press(screen.getAllByText(todayLabel)[0]);
+  fireEvent.press(screen.getAllByText(todayLabel)[0]);
+  await act(async () => { fireEvent.press(screen.getByText('REQUEST')); });
+  expect(mockConfirm).toHaveBeenCalledWith('Request sent');
+});
+
+it('does not confirm when sending the request fails', async () => {
+  mockCreateThread.mockRejectedValueOnce(new Error('nope'));
+  renderScreen();
+  fireEvent.press(screen.getAllByText(todayLabel)[0]);
+  fireEvent.press(screen.getAllByText(todayLabel)[0]);
+  await act(async () => { fireEvent.press(screen.getByText('REQUEST')); });
+  expect(mockConfirm).not.toHaveBeenCalled();
+  expect(navigate).not.toHaveBeenCalled();
 });

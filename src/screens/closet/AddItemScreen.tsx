@@ -24,6 +24,8 @@ import Chip from '../../components/Chip';
 import Toggle from '../../components/Toggle';
 import { useCloset } from '../../context/ClosetContext';
 import { useAuth } from '../../context/AuthContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import PressableScale from '../../components/PressableScale';
 import { useHauses } from '../../context/HausesContext';
 import { uploadPhotos } from '../../services/storageService';
 import VisibilityToggle from '../../components/VisibilityToggle';
@@ -44,6 +46,7 @@ export default function AddItemScreen() {
   const navigation = useNavigation();
   const { addItem, updateItem } = useCloset();
   const { user } = useAuth();
+  const confirm = useConfirmation();
   const { hauses } = useHauses();
 
   const route = useRoute<RouteProp<AppStackParamList, 'AddItem'>>();
@@ -274,6 +277,7 @@ export default function AddItemScreen() {
       } else {
         await addItem(buildItem(status, allUrls));
       }
+      confirm(isEditMode ? 'Item updated' : status === 'draft' ? 'Draft saved' : 'Item listed');
       navigation.goBack();
     } catch (e) {
       Alert.alert('Could not save item', e instanceof Error ? e.message : 'Please try again.');
@@ -522,13 +526,13 @@ export default function AddItemScreen() {
 
         {/* ── BOTTOM CTAs ── */}
         <View style={styles.ctaStack}>
-          <Pressable style={styles.ctaList} onPress={handleList} disabled={isUploading}>
+          <PressableScale style={styles.ctaList} onPress={handleList} disabled={isUploading} scaleTo={0.97}>
             <Text style={styles.ctaListText}>{isEditMode ? 'UPDATE ITEM' : 'LIST ITEM'}</Text>
-          </Pressable>
+          </PressableScale>
           {!isEditMode && (
-            <Pressable style={styles.ctaDraft} onPress={handleDraft} disabled={isUploading}>
+            <PressableScale style={styles.ctaDraft} onPress={handleDraft} disabled={isUploading} scaleTo={0.97}>
               <Text style={styles.ctaDraftText}>SAVE AS DRAFT</Text>
-            </Pressable>
+            </PressableScale>
           )}
         </View>
       </ScrollView>

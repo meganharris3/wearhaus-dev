@@ -20,6 +20,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import StatusTag from '../../components/StatusTag';
 import { useAuth } from '../../context/AuthContext';
+import PressableScale from '../../components/PressableScale';
 import { useInteractions } from '../../context/InteractionsContext';
 import { useMessages } from '../../context/MessagesContext';
 import CommentThread from '../../components/CommentThread';
@@ -309,9 +310,9 @@ export default function ItemDetailScreen({ route }: Props) {
               <Ionicons name="chatbubble-outline" size={15} color={theme.colors.ink} />
               <Text style={styles.messageBtnText}>MESSAGE</Text>
             </Pressable>
-            <Pressable style={styles.requestBtn} onPress={() => navigation.navigate('DatePicker', { item })}>
+            <PressableScale style={styles.requestBtn} onPress={() => navigation.navigate('DatePicker', { item })}>
               <Text style={styles.requestBtnText}>REQUEST</Text>
-            </Pressable>
+            </PressableScale>
           </View>
         )}
       </SafeAreaView>

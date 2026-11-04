@@ -18,6 +18,7 @@ jest.mock('../../context/AuthContext', () => ({
 }));
 
 const mockAcceptCounterOffer = jest.fn();
+const mockUpdateRequestStatus = jest.fn();
 const mockSendMessage = jest.fn();
 let mockThread: any;
 jest.mock('../../context/MessagesContext', () => ({
@@ -26,7 +27,7 @@ jest.mock('../../context/MessagesContext', () => ({
     openThread: jest.fn().mockResolvedValue(undefined),
     markRead: jest.fn(),
     sendMessage: mockSendMessage,
-    updateRequestStatus: jest.fn(),
+    updateRequestStatus: mockUpdateRequestStatus,
     acceptCounterOffer: mockAcceptCounterOffer,
     createDirectThread: jest.fn(),
   }),
@@ -37,6 +38,9 @@ let mockLends: any[] = [];
 jest.mock('../../context/BorrowsContext', () => ({
   useBorrows: () => ({ borrows: mockBorrows, lends: mockLends }),
 }));
+
+const mockConfirm = jest.fn();
+jest.mock('../../context/ConfirmationContext', () => ({ useConfirmation: () => mockConfirm }));
 
 import ChatThreadScreen from '../../screens/messages/ChatThreadScreen';
 
@@ -76,7 +80,15 @@ it("accepting the other person's counter offer applies it", async () => {
   await act(async () => { fireEvent.press(screen.getByText('ACCEPT')); });
 
   expect(mockAcceptCounterOffer).toHaveBeenCalledWith('t1', 'm2');
+  expect(mockConfirm).toHaveBeenCalledWith('Offer accepted');
   expect(mockSendMessage).toHaveBeenCalledWith('t1', { type: 'system', text: 'Offer accepted' });
+});
+
+it('does not confirm when accepting the offer fails', async () => {
+  mockAcceptCounterOffer.mockRejectedValueOnce(new Error('nope'));
+  renderScreen();
+  await act(async () => { fireEvent.press(screen.getByText('ACCEPT')); });
+  expect(mockConfirm).not.toHaveBeenCalled();
 });
 
 it('hides the actions once the offer is accepted', () => {
@@ -138,6 +150,15 @@ describe('accepted borrow request card', () => {
     renderScreen();
     fireEvent.press(screen.getByText('Denim Jacket'));
     expect(mockNavigate).toHaveBeenCalledWith('ExchangeDetail', { exchangeId: 'rental-9', mode: 'lending' });
+  });
+
+  it("confirms when the lender accepts the request", async () => {
+    mockThread.messages = [request({ lenderId: 'me', borrowerId: 'u2', status: 'pending' })];
+    mockUpdateRequestStatus.mockResolvedValue(undefined);
+    renderScreen();
+    await act(async () => { fireEvent.press(screen.getByText('Accept')); });
+    expect(mockUpdateRequestStatus).toHaveBeenCalledWith('t1', 'm1', 'accepted');
+    expect(mockConfirm).toHaveBeenCalledWith('Request accepted');
   });
 
   it('has no dashboard link while the request is still pending', () => {

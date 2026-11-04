@@ -6,13 +6,14 @@ import {
   ScrollView,
   Pressable,
   StyleSheet,
-  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { theme } from '../../theme';
 import { useFriends } from '../../context/FriendsContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import PressableScale from '../../components/PressableScale';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Friend, FriendRequest, SuggestedFriend } from '../../types';
 
@@ -56,9 +57,9 @@ function RequestRow({
         <Text style={styles.rowMeta}>{request.from.handle} · {request.from.mutual} mutual</Text>
       </View>
       <View style={styles.requestActions}>
-        <Pressable onPress={onAccept} style={styles.acceptBtn}>
+        <PressableScale onPress={onAccept} style={styles.acceptBtn}>
           <Text style={styles.acceptBtnText}>ACCEPT</Text>
-        </Pressable>
+        </PressableScale>
         <Pressable onPress={onDecline} style={styles.declineBtn}>
           <Text style={styles.declineBtnText}>✕</Text>
         </Pressable>
@@ -107,29 +108,6 @@ function SuggestedRow({
   );
 }
 
-// ─── Toast ────────────────────────────────────────────────────────────────────
-function useToast() {
-  const [message, setMessage] = useState<string | null>(null);
-  const opacity = useState(new Animated.Value(0))[0];
-
-  const show = useCallback((msg: string) => {
-    setMessage(msg);
-    Animated.sequence([
-      Animated.timing(opacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.delay(1800),
-      Animated.timing(opacity, { toValue: 0, duration: 200, useNativeDriver: true }),
-    ]).start(() => setMessage(null));
-  }, [opacity]);
-
-  const Toast = message ? (
-    <Animated.View style={[styles.toast, { opacity }]}>
-      <Text style={styles.toastText}>{message}</Text>
-    </Animated.View>
-  ) : null;
-
-  return { show, Toast };
-}
-
 // ─── Main screen ──────────────────────────────────────────────────────────────
 export default function FriendsScreen() {
   const navigation = useNavigation<NavigationProp<AppStackParamList>>();
@@ -137,7 +115,7 @@ export default function FriendsScreen() {
     useFriends();
 
   const [searchQuery, setSearchQuery] = useState('');
-  const { show: showToast, Toast } = useToast();
+  const confirm = useConfirmation();
 
   const q = searchQuery.toLowerCase().trim();
 
@@ -164,12 +142,11 @@ export default function FriendsScreen() {
 
   async function handleAccept(requestId: string) {
     const newFriend = await acceptRequest(requestId);
-    showToast(`Connected with ${newFriend.name}`);
+    confirm(`You're now friends with ${newFriend.name}`);
   }
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
-      {Toast}
 
       {/* Top bar */}
       <View style={styles.topBar}>
@@ -403,19 +380,4 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
   },
 
-  // Toast
-  toast: {
-    position: 'absolute',
-    bottom: 40,
-    alignSelf: 'center',
-    zIndex: 100,
-    backgroundColor: theme.colors.ink,
-    borderRadius: 2,
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-  },
-  toastText: {
-    fontFamily: theme.fonts.interSemiBold,
-    fontSize: 12, color: theme.colors.ivory,
-  },
 });

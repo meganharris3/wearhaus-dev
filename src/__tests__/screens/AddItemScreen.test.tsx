@@ -36,6 +36,9 @@ jest.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: jest.fn(),
 }));
 
+const mockConfirm = jest.fn();
+jest.mock('../../context/ConfirmationContext', () => ({ useConfirmation: () => mockConfirm }));
+
 import AddItemScreen from '../../screens/closet/AddItemScreen';
 
 beforeEach(() => {
@@ -114,5 +117,22 @@ describe('AddItemScreen size multi-select', () => {
     expect(mockAddItem).toHaveBeenCalledWith(
       expect.objectContaining({ size_label: ['M'] }),
     );
+  });
+});
+
+describe('AddItemScreen save confirmation', () => {
+  it('confirms once the item is saved', async () => {
+    render(<AddItemScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText('e.g. Oversized Blazer'), 'My Item');
+    await act(async () => { fireEvent.press(screen.getByText('SAVE AS DRAFT')); });
+    expect(mockConfirm).toHaveBeenCalledWith('Draft saved');
+  });
+
+  it('does not confirm when saving fails', async () => {
+    mockAddItem.mockRejectedValueOnce(new Error('nope'));
+    render(<AddItemScreen />);
+    fireEvent.changeText(screen.getByPlaceholderText('e.g. Oversized Blazer'), 'My Item');
+    await act(async () => { fireEvent.press(screen.getByText('SAVE AS DRAFT')); });
+    expect(mockConfirm).not.toHaveBeenCalled();
   });
 });

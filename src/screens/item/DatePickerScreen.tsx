@@ -15,6 +15,8 @@ import {
 } from '../../utils/dateUtils';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import PressableScale from '../../components/PressableScale';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'DatePicker'>;
 
@@ -28,6 +30,7 @@ export default function DatePickerScreen({ route, navigation }: Props) {
   ];
 
   const { createThread } = useMessages();
+  const confirm = useConfirmation();
   const { user, profile } = useAuth();
   const [isRequesting, setIsRequesting] = useState(false);
   const [month, setMonth]                 = useState(new Date());
@@ -112,6 +115,7 @@ export default function DatePickerScreen({ route, navigation }: Props) {
       return;
     }
 
+    confirm('Request sent');
     navigation.navigate('ChatThread', { threadId });
   }
 
@@ -123,13 +127,13 @@ export default function DatePickerScreen({ route, navigation }: Props) {
           <Text style={styles.backText}>← BACK</Text>
         </Pressable>
         <Text style={styles.topTitle}>PICK DATES</Text>
-        <Pressable
+        <PressableScale
           style={[styles.nextBtn, !hasRange && styles.nextBtnDisabled]}
           disabled={!hasRange || isRequesting}
           onPress={handleRequest}
         >
-          <Text style={styles.nextBtnText}>REQUEST</Text>
-        </Pressable>
+          <Text style={styles.nextBtnText}>{isRequesting ? 'SENDING…' : 'REQUEST'}</Text>
+        </PressableScale>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
@@ -199,15 +203,15 @@ export default function DatePickerScreen({ route, navigation }: Props) {
 
         {/* CTA */}
         <View style={styles.ctaWrap}>
-          <Pressable
+          <PressableScale
             style={[styles.ctaBtn, !hasRange && styles.ctaBtnDisabled]}
-            disabled={!hasRange}
+            disabled={!hasRange || isRequesting}
             onPress={handleRequest}
           >
             <Text style={[styles.ctaBtnText, !hasRange && styles.ctaBtnTextDisabled]}>
-              REQUEST TO BORROW
+              {isRequesting ? 'SENDING REQUEST…' : 'REQUEST TO BORROW'}
             </Text>
-          </Pressable>
+          </PressableScale>
         </View>
 
         <View style={{ height: 40 }} />

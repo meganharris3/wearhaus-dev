@@ -8,6 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { AuthProvider } from './src/context/AuthContext';
 import RootNavigator from './src/navigation/RootNavigator';
 import { InstallPromptProvider } from './src/context/InstallPromptContext';
+import { ConfirmationProvider } from './src/context/ConfirmationContext';
 import { registerServiceWorker } from './src/lib/registerServiceWorker';
 import './src/lib/webAlert'; // makes Alert.alert work on web (React Native Web's is a no-op)
 
@@ -39,7 +40,9 @@ export default function App() {
         <StatusBar style="dark" backgroundColor="#FDFBF4" />
         <AuthProvider>
           <InstallPromptProvider>
-            <RootNavigator />
+            <ConfirmationProvider>
+              <RootNavigator />
+            </ConfirmationProvider>
           </InstallPromptProvider>
         </AuthProvider>
       </View>

@@ -11,6 +11,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import { theme } from '../../theme';
 import { useRequests, Request, RequestStatus } from '../../context/RequestsContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import PressableScale from '../../components/PressableScale';
 
 type FilterTab = 'All' | 'Borrows' | 'Friends' | 'Activity';
 const FILTER_TABS: FilterTab[] = ['All', 'Borrows', 'Friends', 'Activity'];
@@ -34,6 +36,12 @@ function labelFor(request: Request): string {
   if (request.type === 'haus_invite') return 'HAUS INVITE';
   if (request.type === 'haus_accepted') return 'NEW MEMBER';
   return STATUS_LABEL[request.status];
+}
+
+function acceptedMessage(request: Request): string {
+  if (request.type === 'friend_request') return `You're now friends with ${request.borrowerName}`;
+  if (request.type === 'haus_invite')    return `You joined ${request.hausName}`;
+  return 'Request accepted';
 }
 
 function bodyFor(request: Request): string {
@@ -72,6 +80,7 @@ function filterNotifs(notifs: Request[], tab: FilterTab): Request[] {
 export default function RequestsScreen() {
   const navigation = useNavigation();
   const { requests, pendingCount, refreshRequests, acceptRequest, declineRequest, markAllRead } = useRequests();
+  const confirm = useConfirmation();
   const [activeTab, setActiveTab] = useState<FilterTab>('All');
 
   const filtered = useMemo(() => filterNotifs(requests, activeTab), [requests, activeTab]);
@@ -81,9 +90,10 @@ export default function RequestsScreen() {
   // Leaving the screen counts as having seen everything on it.
   useEffect(() => () => { markAllRead().catch(() => {}); }, [markAllRead]);
 
-  async function respond(action: () => Promise<void>) {
+  async function respond(action: () => Promise<void>, confirmation?: string) {
     try {
       await action();
+      if (confirmation) confirm(confirmation);
     } catch (e) {
       Alert.alert('Something went wrong', e instanceof Error ? e.message : 'Please try again.');
     }
@@ -128,7 +138,7 @@ export default function RequestsScreen() {
         renderItem={({ item }) => (
           <RequestItem
             request={item}
-            onAccept={() => respond(() => acceptRequest(item.id))}
+            onAccept={() => respond(() => acceptRequest(item.id), acceptedMessage(item))}
             onDecline={() => respond(() => declineRequest(item.id))}
           />
         )}
@@ -187,9 +197,9 @@ function RequestItem({
         {/* Action buttons — pending */}
         {isPending && (
           <View style={itemStyles.actions}>
-            <Pressable style={itemStyles.acceptBtn} onPress={onAccept}>
+            <PressableScale style={itemStyles.acceptBtn} onPress={onAccept}>
               <Text style={itemStyles.acceptText}>ACCEPT</Text>
-            </Pressable>
+            </PressableScale>
             <Pressable style={itemStyles.declineBtn} onPress={onDecline}>
               <Text style={itemStyles.declineText}>DECLINE</Text>
             </Pressable>

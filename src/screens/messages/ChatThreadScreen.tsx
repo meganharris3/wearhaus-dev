@@ -10,6 +10,8 @@ import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
 import { useBorrows } from '../../context/BorrowsContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import PressableScale from '../../components/PressableScale';
 import { formatMessageTime, toDateStr } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread, Item } from '../../types';
@@ -112,9 +114,9 @@ function LenderActions({
       <TouchableOpacity onPress={onCounter} style={cardStyles.btnInk}>
         <Text style={cardStyles.btnInkText}>Counter</Text>
       </TouchableOpacity>
-      <TouchableOpacity onPress={onAccept} style={cardStyles.btnYellow}>
+      <PressableScale onPress={onAccept} style={cardStyles.btnYellow}>
         <Text style={cardStyles.btnYellowText}>Accept</Text>
-      </TouchableOpacity>
+      </PressableScale>
     </View>
   );
 }
@@ -305,9 +307,9 @@ function CounterOfferCard({
       )}
       {!isMine && payload.status !== 'accepted' && (
         <View style={styles.cardActions}>
-          <Pressable style={[styles.cardBtn, styles.cardBtnPrimary]} onPress={onAccept}>
+          <PressableScale style={[styles.cardBtn, styles.cardBtnPrimary]} onPress={onAccept}>
             <Text style={styles.cardBtnPrimaryText}>ACCEPT</Text>
-          </Pressable>
+          </PressableScale>
           <Pressable
             style={[styles.cardBtn, styles.cardBtnSecondary]}
             onPress={() => navigation.navigate('MakeOffer', { threadId: thread.id, pricePerDay: payload.pricePerDay })}
@@ -347,6 +349,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
   const { threadId: initialThreadId, pendingItem, pendingOtherUser } = route.params;
   const { getThread, openThread, markRead, sendMessage, updateRequestStatus, acceptCounterOffer, createDirectThread } = useMessages();
   const { borrows, lends } = useBorrows();
+  const confirm = useConfirmation();
   const [inputText, setInputText] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId);
   const [isSending, setIsSending] = useState(false);
@@ -406,10 +409,12 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     msg: ChatMessage,
     status: 'accepted' | 'declined',
     notice: string,
+    confirmation?: string,
   ) {
     if (!activeThreadId) return;
     try {
       await updateRequestStatus(activeThreadId, msg.id, status);
+      if (confirmation) confirm(confirmation);
       await sendMessage(activeThreadId, { type: 'system', text: notice });
     } catch (e) {
       showError('Could not update request', e);
@@ -418,7 +423,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
 
   function handleAccept(msg: ChatMessage) {
     const payload = msg.payload as BorrowRequestPayload;
-    resolveRequest(msg, 'accepted', `${payload.lenderFirstName} accepted the request`);
+    resolveRequest(msg, 'accepted', `${payload.lenderFirstName} accepted the request`, 'Request accepted');
   }
 
   function handleDecline(msg: ChatMessage) {
@@ -439,6 +444,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     if (!activeThreadId) return;
     try {
       await acceptCounterOffer(activeThreadId, msg.id);
+      confirm('Offer accepted');
       await sendMessage(activeThreadId, { type: 'system', text: 'Offer accepted' });
     } catch (e) {
       showError('Could not accept offer', e);
