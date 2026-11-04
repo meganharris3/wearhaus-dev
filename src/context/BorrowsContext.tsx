@@ -25,8 +25,9 @@ export function isThisMonth(dateStr: string): boolean {
   return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear();
 }
 
+/** 'Nov 3'. Takes a plain 'YYYY-MM-DD' (read as a local date) or a full timestamp. */
 export function formatDate(dateStr: string): string {
-  const d = new Date(dateStr + 'T00:00:00');
+  const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00');
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 

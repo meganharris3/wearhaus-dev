@@ -19,16 +19,18 @@ jest.mock('@expo/vector-icons', () => {
   return { Ionicons: Icon, MaterialCommunityIcons: Icon };
 });
 
-const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+// Dates are inlined: jest hoists these fixtures (they're used in a mock factory) above any
+// other const, so a shared date const would still be undefined when they're built.
 const borrow = {
   id: 'r1', itemId: 'i1', itemName: 'Denim Jacket', itemThumbColor: '#ddd',
   lenderId: 'l1', lenderName: 'Jordan Lee', lenderAvatarColor: '#eee',
-  status: 'upcoming', pricePerDay: 10, startDate: inAWeek, endDate: inAWeek, threadId: 't1', rating: null,
+  status: 'upcoming', pricePerDay: 10, startDate: '2099-01-15', endDate: '2099-01-15', threadId: 't1', rating: null,
 };
 const lend = {
   id: 'r2', itemId: 'i2', itemName: 'Silk Scarf', itemThumbColor: '#ddd',
   borrowerId: 'b1', borrowerName: 'Sam Park', borrowerInitials: 'SP', borrowerAvatarColor: '#eee',
-  status: 'upcoming', pricePerDay: 5, startDate: inAWeek, endDate: inAWeek, threadId: 't2',
+  status: 'upcoming', pricePerDay: 5, startDate: '2099-01-15', endDate: '2099-01-15', threadId: 't2',
+  acceptedAt: '2026-11-03T18:20:00.000Z',
 };
 jest.mock('../../context/BorrowsContext', () => ({
   ...jest.requireActual('../../context/BorrowsContext'),
@@ -58,4 +60,17 @@ it("shows the lender what they'll earn", () => {
   mockRouteParams = { exchangeId: 'r2', mode: 'lending' };
   render(<ExchangeDetailScreen />);
   expect(screen.getByText(/You'll Earn/i)).toBeTruthy();
+});
+
+it('shows the tab footer', () => {
+  mockRouteParams = { exchangeId: 'r1', mode: 'borrowing' };
+  render(<ExchangeDetailScreen />);
+  expect(screen.getByLabelText('Closet')).toBeTruthy();
+});
+
+it('shows when the request was accepted (a full timestamp, not a plain date)', () => {
+  mockRouteParams = { exchangeId: 'r2', mode: 'lending' };
+  render(<ExchangeDetailScreen />);
+  expect(screen.queryByText(/Invalid Date/)).toBeNull();
+  expect(screen.getByText('Nov 3')).toBeTruthy();
 });
