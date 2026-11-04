@@ -32,6 +32,12 @@ jest.mock('../../context/MessagesContext', () => ({
   }),
 }));
 
+let mockBorrows: any[] = [];
+let mockLends: any[] = [];
+jest.mock('../../context/BorrowsContext', () => ({
+  useBorrows: () => ({ borrows: mockBorrows, lends: mockLends }),
+}));
+
 import ChatThreadScreen from '../../screens/messages/ChatThreadScreen';
 
 const counter = (overrides: Record<string, unknown> = {}) => ({
@@ -56,6 +62,8 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockAcceptCounterOffer.mockResolvedValue(undefined);
   mockSendMessage.mockResolvedValue(undefined);
+  mockBorrows = [];
+  mockLends = [];
   mockThread = {
     id: 't1',
     otherUser: { id: 'u2', name: 'Jordan Lee', handle: '@jordan', initials: 'JL', avatarColor: '#eee' },
@@ -114,6 +122,22 @@ describe('accepted borrow request card', () => {
     renderScreen();
     fireEvent.press(screen.getByText(/View in Borrowing/));
     expect(mockNavigate).toHaveBeenCalledWith('BorrowsDashboard', { mode: 'borrowing', tab: 'Upcoming' });
+  });
+
+  it("tapping the card opens the borrower's exchange for this rental", () => {
+    mockThread.messages = [request({})];
+    mockBorrows = [{ id: 'rental-9', threadId: 't1', startDate: iso(0) }];
+    renderScreen();
+    fireEvent.press(screen.getByText('Denim Jacket'));
+    expect(mockNavigate).toHaveBeenCalledWith('ExchangeDetail', { exchangeId: 'rental-9', mode: 'borrowing' });
+  });
+
+  it("tapping the card opens the lender's exchange for this rental", () => {
+    mockThread.messages = [request({ lenderId: 'me', borrowerId: 'u2' })];
+    mockLends = [{ id: 'rental-9', threadId: 't1', startDate: iso(0) }];
+    renderScreen();
+    fireEvent.press(screen.getByText('Denim Jacket'));
+    expect(mockNavigate).toHaveBeenCalledWith('ExchangeDetail', { exchangeId: 'rental-9', mode: 'lending' });
   });
 
   it('has no dashboard link while the request is still pending', () => {

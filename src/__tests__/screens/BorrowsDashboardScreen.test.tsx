@@ -7,10 +7,11 @@ import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 
 let mockRouteParams: Record<string, unknown> | undefined;
+const mockNavigate = jest.fn();
 jest.mock('@react-navigation/native', () => {
   const React = require('react');
   return {
-    useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
+    useNavigation: () => ({ navigate: mockNavigate, goBack: jest.fn() }),
     useRoute: () => ({ key: 'k', name: 'BorrowsDashboard', params: mockRouteParams }),
     useFocusEffect: (cb: () => void) => { React.useEffect(cb, [cb]); },
   };
@@ -91,4 +92,18 @@ it('opens on the lending side and tab it was navigated to', () => {
   mockRouteParams = { mode: 'lending', tab: 'Upcoming' };
   render(<BorrowsDashboardScreen />);
   expect(screen.getAllByText(/Silk Scarf/).length).toBeGreaterThan(0);
+});
+
+it('opens the exchange when the borrower taps an upcoming borrow', () => {
+  const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  mockBorrows = [{
+    id: 'r1', itemId: 'i1', itemName: 'Denim Jacket', itemThumbColor: '#ddd',
+    lenderId: 'l1', lenderName: 'Jordan Lee', lenderAvatarColor: '#eee',
+    status: 'upcoming', pricePerDay: 10, startDate: inAWeek, endDate: inAWeek, threadId: 't1', rating: null,
+  }];
+  mockRouteParams = { mode: 'borrowing', tab: 'Upcoming' };
+  render(<BorrowsDashboardScreen />);
+
+  fireEvent.press(screen.getByText('Denim Jacket'));
+  expect(mockNavigate).toHaveBeenCalledWith('ExchangeDetail', { exchangeId: 'r1', mode: 'borrowing' });
 });

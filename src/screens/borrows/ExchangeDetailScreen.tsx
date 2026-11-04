@@ -332,15 +332,16 @@ function RatingSimple({
 export default function ExchangeDetailScreen() {
   const nav   = useNavigation<Nav>();
   const route = useRoute<Route>();
-  const { exchangeId, mode } = route.params;
+  const { exchangeId } = route.params;
 
   const { borrows, lends, updateBorrowStatus } = useBorrows();
   const { findThreadByUser, createDirectThread, sendMessage } = useMessages();
 
-  const exchange: BorrowRecord | LendRecord | undefined =
-    mode === 'borrowing'
-      ? borrows.find(b => b.id === exchangeId)
-      : lends.find(l => l.id === exchangeId);
+  // Which side the user is on comes from the rental itself, not the route's `mode`, so a
+  // borrower can never be shown the lender's view ("You'll Earn", Nudge Return).
+  const borrowed = borrows.find(b => b.id === exchangeId);
+  const exchange: BorrowRecord | LendRecord | undefined = borrowed ?? lends.find(l => l.id === exchangeId);
+  const mode: 'borrowing' | 'lending' = borrowed ? 'borrowing' : 'lending';
 
   if (!exchange) {
     return (

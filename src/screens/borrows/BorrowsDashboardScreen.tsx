@@ -211,9 +211,14 @@ function LendingCard({
 function UpcomingBorrowRow({
   borrow, onEdit, onCancel,
 }: { borrow: BorrowRecord; onEdit: () => void; onCancel: () => void }) {
+  const nav = useNavigation<DashNavProp>();
   return (
     <View style={s.card}>
-      <View style={s.cardBody}>
+      <TouchableOpacity
+        style={s.cardBody}
+        onPress={() => nav.navigate('ExchangeDetail', { exchangeId: borrow.id, mode: 'borrowing' })}
+        activeOpacity={0.7}
+      >
         <ItemThumb record={borrow} style={s.upcomingThumb} iconSize={20} iconOpacity={0.2} />
         <View style={{ flex: 1 }}>
           <Text style={s.cardItemName}>{borrow.itemName}</Text>
@@ -225,7 +230,7 @@ function UpcomingBorrowRow({
           </Text>
         </View>
         <Text style={s.priceTag}>{formatPrice(borrow.pricePerDay)}/day</Text>
-      </View>
+      </TouchableOpacity>
       <View style={s.cardFooter}>
         <ActionBtn label="Edit Dates" variant="outline" onPress={onEdit} />
         <ActionBtn label="Cancel" variant="ghost" onPress={onCancel} />

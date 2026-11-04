@@ -9,6 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
+import { useBorrows } from '../../context/BorrowsContext';
 import { formatMessageTime, toDateStr } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread, Item } from '../../types';
@@ -192,6 +193,7 @@ function BorrowRequestCard({
   onCounter,
   onCancel,
   onViewDashboard,
+  onOpenExchange,
 }: {
   msg: ChatMessage;
   onAccept: () => void;
@@ -199,6 +201,7 @@ function BorrowRequestCard({
   onCounter: () => void;
   onCancel: () => void;
   onViewDashboard: (mode: 'borrowing' | 'lending') => void;
+  onOpenExchange: (mode: 'borrowing' | 'lending') => void;
 }) {
   const { user } = useAuth();
   const payload = msg.payload as BorrowRequestPayload;
@@ -208,7 +211,13 @@ function BorrowRequestCard({
   return (
     <View style={cardStyles.shell}>
       <RequestHeader status={payload.status} />
-      <ItemStrip item={payload.item} />
+      {payload.status === 'accepted' && (isBorrower || isLender) ? (
+        <TouchableOpacity activeOpacity={0.7} onPress={() => onOpenExchange(isBorrower ? 'borrowing' : 'lending')}>
+          <ItemStrip item={payload.item} />
+        </TouchableOpacity>
+      ) : (
+        <ItemStrip item={payload.item} />
+      )}
       <View style={cardStyles.divider} />
       <FactsList payload={payload} />
       <TotalRow total={payload.total} />
@@ -337,6 +346,7 @@ function ItemMentionCard({ item }: { item: Item }) {
 export default function ChatThreadScreen({ route, navigation }: Props) {
   const { threadId: initialThreadId, pendingItem, pendingOtherUser } = route.params;
   const { getThread, openThread, markRead, sendMessage, updateRequestStatus, acceptCounterOffer, createDirectThread } = useMessages();
+  const { borrows, lends } = useBorrows();
   const [inputText, setInputText] = useState('');
   const [activeThreadId, setActiveThreadId] = useState<string | undefined>(initialThreadId);
   const [isSending, setIsSending] = useState(false);
@@ -442,6 +452,15 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     navigation.navigate('BorrowsDashboard', { mode, tab: started ? 'Active' : 'Upcoming' });
   }
 
+  function handleOpenExchange(msg: ChatMessage, mode: 'borrowing' | 'lending') {
+    const payload = msg.payload as BorrowRequestPayload;
+    const records: { id: string; threadId: string; startDate: string }[] = mode === 'borrowing' ? borrows : lends;
+    const rental = records.find((r) => r.threadId === activeThreadId && r.startDate === payload.startDateISO);
+    // Not loaded yet (or an old request with no rental) — the dashboard re-fetches on open.
+    if (!rental) return handleViewDashboard(msg, mode);
+    navigation.navigate('ExchangeDetail', { exchangeId: rental.id, mode });
+  }
+
   function handleCancel(msg: ChatMessage) {
     resolveRequest(msg, 'declined', 'Request cancelled');
   }
@@ -464,6 +483,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
             onCounter={() => handleCounter(msg)}
             onCancel={() => handleCancel(msg)}
             onViewDashboard={(mode) => handleViewDashboard(msg, mode)}
+            onOpenExchange={(mode) => handleOpenExchange(msg, mode)}
           />
         );
       case 'counter_offer':
