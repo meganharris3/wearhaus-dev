@@ -30,6 +30,11 @@ export function formatDate(dateStr: string): string {
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
+/** '$12' or '$12.50' */
+export function formatPrice(dollars: number): string {
+  return `$${Number.isInteger(dollars) ? dollars : dollars.toFixed(2)}`;
+}
+
 // ── types ─────────────────────────────────────────────────────────────────────
 
 export type BorrowRecord = {
@@ -37,6 +42,7 @@ export type BorrowRecord = {
   itemId: string;
   itemName: string;
   itemThumbColor: string;
+  itemPhoto?: string;
   lenderId: string;
   lenderName: string;
   lenderAvatarColor?: string;
@@ -58,6 +64,7 @@ export type LendRecord = {
   itemId: string;
   itemName: string;
   itemThumbColor: string;
+  itemPhoto?: string;
   borrowerId: string;
   borrowerName: string;
   borrowerInitials: string;

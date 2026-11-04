@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { NavigationProp, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import {
-  useBorrows, getDaysUntil, getDays, formatDate,
+  useBorrows, getDaysUntil, getDays, formatDate, formatPrice,
 } from '../../context/BorrowsContext';
 import type { BorrowRecord, LendRecord } from '../../context/BorrowsContext';
 import { useMessages } from '../../context/MessagesContext';
@@ -49,7 +49,11 @@ function PhotoHero({
         s.hero,
         { backgroundColor: exchange.itemThumbColor, opacity: exchange.status === 'completed' ? 0.85 : 1 },
       ]}>
-        <Ionicons name="shirt-outline" size={56} color="#14120C" style={{ opacity: 0.1 }} />
+        {exchange.itemPhoto ? (
+          <Image source={{ uri: exchange.itemPhoto }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+        ) : (
+          <Ionicons name="shirt-outline" size={56} color="#14120C" style={{ opacity: 0.1 }} />
+        )}
       </View>
 
       <View style={s.heroButtons}>
@@ -78,7 +82,7 @@ function TitleBlock({ exchange }: { exchange: BorrowRecord | LendRecord }) {
       <View style={s.titleRow}>
         <Text style={s.titleName} numberOfLines={2}>{exchange.itemName}</Text>
         <View style={s.titlePrice}>
-          <Text style={s.titlePriceNum}>${exchange.pricePerDay}</Text>
+          <Text style={s.titlePriceNum}>{formatPrice(exchange.pricePerDay)}</Text>
           <Text style={s.titlePriceUnit}>/day</Text>
         </View>
       </View>
@@ -187,9 +191,9 @@ function TotalCard({ exchange, mode }: { exchange: BorrowRecord | LendRecord; mo
   const isEarning = mode === 'lending';
   const days      = getDays(exchange.startDate, exchange.endDate);
   const subtotal  = exchange.pricePerDay * days;
-  const serviceFee = Math.round(subtotal * 0.07);
+  const serviceFee = +(subtotal * 0.07).toFixed(2);
   const deposit    = isEarning ? 0 : Math.round(exchange.pricePerDay * 1.5);
-  const total      = isEarning ? subtotal : subtotal + serviceFee + deposit;
+  const total      = isEarning ? subtotal : +(subtotal + serviceFee + deposit).toFixed(2);
 
   const cardBg    = isEarning ? '#FFFFAD' : '#14120C';
   const headColor = isEarning ? '#3A3A00' : '#FFFFAD';
@@ -210,26 +214,26 @@ function TotalCard({ exchange, mode }: { exchange: BorrowRecord | LendRecord; mo
         </TouchableOpacity>
       </View>
       <Text style={[s.totalCardAmount, { color: bigColor }]}>
-        ${isEarning ? subtotal : total}
+        {formatPrice(isEarning ? subtotal : total)}
       </Text>
 
       {expanded && (
         <View style={[s.breakdown, { borderTopColor: divider }]}>
           <BreakdownRow
-            label={`$${exchange.pricePerDay} × ${days} day${days > 1 ? 's' : ''}`}
-            value={`$${subtotal}`}
+            label={`${formatPrice(exchange.pricePerDay)} × ${days} day${days > 1 ? 's' : ''}`}
+            value={formatPrice(subtotal)}
             labelColor={rowLabel} valueColor={rowValue}
           />
           {isEarning ? (
             <BreakdownRow
               label="Service fee (paid by borrower)"
-              value={`$${serviceFee}`}
+              value={formatPrice(serviceFee)}
               labelColor={rowLabel} valueColor={rowValue}
             />
           ) : (
             <>
               <BreakdownRow label="Service fee" value={`$${serviceFee}`} labelColor={rowLabel} valueColor={rowValue} />
-              <BreakdownRow label="Deposit (refundable)" value={`$${deposit}`} labelColor={rowLabel} valueColor={rowValue} />
+              <BreakdownRow label="Deposit (refundable)" value={formatPrice(deposit)} labelColor={rowLabel} valueColor={rowValue} />
             </>
           )}
         </View>

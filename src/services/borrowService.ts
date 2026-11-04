@@ -24,7 +24,7 @@ const RENTAL_SELECT = `
   id, item_id, status, price_per_day, start_date, end_date,
   thread_id, rating, rating_comment, pickup_method, accepted_at,
   borrower_id, lender_id,
-  item:items(id, name, size_label, condition),
+  item:items(id, name, size_label, condition, photo_url, photo_urls),
   borrower:users!rentals_borrower_id_fkey(id, display_name),
   lender:users!rentals_lender_id_fkey(id, display_name)
 `;
@@ -43,12 +43,19 @@ type RentalRow = {
   accepted_at: string | null;
   borrower_id: string;
   lender_id: string;
-  item: { id: string; name: string; size_label: string[] | null; condition: string | null } | null;
+  item: {
+    id: string; name: string; size_label: string[] | null; condition: string | null;
+    photo_url?: string | null; photo_urls?: string[] | null;
+  } | null;
   borrower: { id: string; display_name: string } | null;
   lender:   { id: string; display_name: string } | null;
 };
 
 // ── mapping ───────────────────────────────────────────────────────────────────
+
+function itemPhoto(item: RentalRow['item']): string | undefined {
+  return item?.photo_url || item?.photo_urls?.[0] || undefined;
+}
 
 function rowToBorrowRecord(row: RentalRow): BorrowRecord {
   const item   = row.item;
@@ -58,11 +65,12 @@ function rowToBorrowRecord(row: RentalRow): BorrowRecord {
     itemId:             row.item_id,
     itemName:           item?.name ?? 'Unknown item',
     itemThumbColor:     stableColor(row.item_id),
+    itemPhoto:          itemPhoto(item),
     lenderId:           row.lender_id,
     lenderName:         lender?.display_name ?? 'Unknown',
     lenderAvatarColor:  stableColor(row.lender_id),
     status:             row.status as BorrowRecord['status'],
-    pricePerDay:        row.price_per_day,
+    pricePerDay:        row.price_per_day / 100, // stored in cents
     startDate:          row.start_date,
     endDate:            row.end_date,
     threadId:           row.thread_id ?? row.id,
@@ -84,12 +92,13 @@ function rowToLendRecord(row: RentalRow): LendRecord {
     itemId:              row.item_id,
     itemName:            item?.name ?? 'Unknown item',
     itemThumbColor:      stableColor(row.item_id),
+    itemPhoto:           itemPhoto(item),
     borrowerId:          row.borrower_id,
     borrowerName:        name,
     borrowerInitials:    initials(name),
     borrowerAvatarColor: stableColor(row.borrower_id),
     status:              row.status as LendRecord['status'],
-    pricePerDay:         row.price_per_day,
+    pricePerDay:         row.price_per_day / 100, // stored in cents
     startDate:           row.start_date,
     endDate:             row.end_date,
     threadId:            row.thread_id ?? row.id,

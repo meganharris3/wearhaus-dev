@@ -61,3 +61,19 @@ it('shows an accepted upcoming borrow under the Upcoming tab', () => {
   fireEvent.press(screen.getByText(/upcoming/i));
   expect(screen.getAllByText(/Denim Jacket/i).length).toBeGreaterThan(0);
 });
+
+it('shows the price and item photo on an upcoming borrow', () => {
+  const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  mockBorrows = [{
+    id: 'r1', itemId: 'i1', itemName: 'Denim Jacket', itemThumbColor: '#ddd',
+    itemPhoto: 'https://x/jacket.jpg',
+    lenderId: 'l1', lenderName: 'Jordan Lee', lenderAvatarColor: '#eee',
+    status: 'upcoming', pricePerDay: 8.5, startDate: inAWeek, endDate: inAWeek,
+    threadId: 't1', rating: null,
+  }];
+  render(<BorrowsDashboardScreen />);
+  fireEvent.press(screen.getByText(/upcoming/i));
+
+  expect(screen.getByText('$8.50/day')).toBeTruthy();
+  expect(screen.getByTestId('item-photo').props.source).toEqual({ uri: 'https://x/jacket.jpg' });
+});

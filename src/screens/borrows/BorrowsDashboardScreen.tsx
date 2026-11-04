@@ -1,13 +1,13 @@
 import { useState, useCallback } from 'react';
 import {
-  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
+  View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
-  useBorrows, getDaysUntil, getDays, formatDate,
+  useBorrows, getDaysUntil, getDays, formatDate, formatPrice,
   BorrowRecord, LendRecord,
 } from '../../context/BorrowsContext';
 import { useMessages } from '../../context/MessagesContext';
@@ -106,6 +106,27 @@ function EmptyState({ message }: { message: string }) {
   );
 }
 
+// ── ItemThumb ─────────────────────────────────────────────────────────────────
+
+function ItemThumb({
+  record, style, iconSize, iconOpacity,
+}: {
+  record: BorrowRecord | LendRecord;
+  style: object | object[];
+  iconSize: number;
+  iconOpacity: number;
+}) {
+  return (
+    <View style={[style, { backgroundColor: record.itemThumbColor, overflow: 'hidden' }]}>
+      {record.itemPhoto ? (
+        <Image testID="item-photo" source={{ uri: record.itemPhoto }} style={StyleSheet.absoluteFill} resizeMode="cover" />
+      ) : (
+        <Ionicons name="shirt-outline" size={iconSize} color="#14120C" style={{ opacity: iconOpacity }} />
+      )}
+    </View>
+  );
+}
+
 // ── ActiveBorrowCard ──────────────────────────────────────────────────────────
 
 function ActiveBorrowCard({
@@ -120,14 +141,13 @@ function ActiveBorrowCard({
         onPress={() => nav.navigate('ExchangeDetail', { exchangeId: borrow.id, mode: 'borrowing' })}
         activeOpacity={0.7}
       >
-        <View style={[s.itemThumb, { backgroundColor: borrow.itemThumbColor }]}>
-          <Ionicons name="shirt-outline" size={20} color="#14120C" style={{ opacity: 0.2 }} />
-        </View>
+        <ItemThumb record={borrow} style={s.itemThumb} iconSize={20} iconOpacity={0.2} />
         <View style={{ flex: 1 }}>
           <Text style={s.cardItemName}>{borrow.itemName}</Text>
           <Text style={s.cardSubtext}>Borrowed from {borrow.lenderName}</Text>
           <CountdownPill config={countdown} />
         </View>
+        <Text style={s.priceTag}>{formatPrice(borrow.pricePerDay)}/day</Text>
       </TouchableOpacity>
       <View style={s.cardFooter}>
         <ActionBtn label="Message" variant="outline"
@@ -160,9 +180,7 @@ function LendingCard({
         onPress={() => nav.navigate('ExchangeDetail', { exchangeId: lend.id, mode: 'lending' })}
         activeOpacity={0.7}
       >
-        <View style={[s.itemThumb, { backgroundColor: lend.itemThumbColor }]}>
-          <Ionicons name="shirt-outline" size={20} color="#14120C" style={{ opacity: 0.2 }} />
-        </View>
+        <ItemThumb record={lend} style={s.itemThumb} iconSize={20} iconOpacity={0.2} />
         <View style={{ flex: 1 }}>
           <Text style={s.cardItemName}>{lend.itemName}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
@@ -173,7 +191,7 @@ function LendingCard({
           </View>
           <CountdownPill config={countdown} />
         </View>
-        <Text style={s.priceTag}>${lend.pricePerDay}/day</Text>
+        <Text style={s.priceTag}>{formatPrice(lend.pricePerDay)}/day</Text>
       </TouchableOpacity>
       <View style={s.cardFooter}>
         <ActionBtn label="Message" variant="outline"
@@ -196,9 +214,7 @@ function UpcomingBorrowRow({
   return (
     <View style={s.card}>
       <View style={s.cardBody}>
-        <View style={[s.upcomingThumb, { backgroundColor: borrow.itemThumbColor }]}>
-          <Ionicons name="shirt-outline" size={20} color="#14120C" style={{ opacity: 0.2 }} />
-        </View>
+        <ItemThumb record={borrow} style={s.upcomingThumb} iconSize={20} iconOpacity={0.2} />
         <View style={{ flex: 1 }}>
           <Text style={s.cardItemName}>{borrow.itemName}</Text>
           <Text style={s.cardSubtext}>
@@ -208,6 +224,7 @@ function UpcomingBorrowRow({
             {formatDate(borrow.startDate)} – {formatDate(borrow.endDate)}
           </Text>
         </View>
+        <Text style={s.priceTag}>{formatPrice(borrow.pricePerDay)}/day</Text>
       </View>
       <View style={s.cardFooter}>
         <ActionBtn label="Edit Dates" variant="outline" onPress={onEdit} />
@@ -227,9 +244,7 @@ function HistoryRow({ borrow, onRate }: { borrow: BorrowRecord; onRate: (b: Borr
       onPress={() => nav.navigate('ExchangeDetail', { exchangeId: borrow.id, mode: 'borrowing' })}
       activeOpacity={0.7}
     >
-      <View style={[s.histThumb, { backgroundColor: borrow.itemThumbColor }]}>
-        <Ionicons name="shirt-outline" size={14} color="#14120C" style={{ opacity: 0.15 }} />
-      </View>
+      <ItemThumb record={borrow} style={s.histThumb} iconSize={14} iconOpacity={0.15} />
       <View style={{ flex: 1 }}>
         <Text style={s.histName}>{borrow.itemName}</Text>
         <Text style={s.histMeta}>
@@ -261,16 +276,14 @@ function LendingHistoryRow({ lend }: { lend: LendRecord }) {
       onPress={() => nav.navigate('ExchangeDetail', { exchangeId: lend.id, mode: 'lending' })}
       activeOpacity={0.7}
     >
-      <View style={[s.histThumb, { backgroundColor: lend.itemThumbColor, opacity: 0.7 }]}>
-        <Ionicons name="shirt-outline" size={14} color="#14120C" style={{ opacity: 0.15 }} />
-      </View>
+      <ItemThumb record={lend} style={[s.histThumb, { opacity: 0.7 }]} iconSize={14} iconOpacity={0.15} />
       <View style={{ flex: 1 }}>
         <Text style={s.histName}>{lend.itemName}</Text>
         <Text style={s.histMeta}>
           To {lend.borrowerName} · {formatDate(lend.startDate)}–{formatDate(lend.endDate)}
         </Text>
       </View>
-      <Text style={s.earnedAmount}>+${earned}</Text>
+      <Text style={s.earnedAmount}>+{formatPrice(earned)}</Text>
     </TouchableOpacity>
   );
 }
@@ -577,7 +590,7 @@ const s = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 0.5, borderBottomColor: '#E2DED0',
   },
-  upcomingThumb: { width: 44, height: 52, borderRadius: 2 },
+  upcomingThumb: { width: 44, height: 52, borderRadius: 2, alignItems: 'center', justifyContent: 'center' },
 
   histRow: {
     marginHorizontal: 18,

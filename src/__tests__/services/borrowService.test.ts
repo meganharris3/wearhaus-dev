@@ -81,4 +81,24 @@ describe('fetchMyRentals', () => {
     mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
     await expect(fetchMyRentals('me')).rejects.toThrow('DB error');
   });
+
+  it('converts the stored price from cents to dollars', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: [rental({ price_per_day: 1250 })], error: null }));
+    const { borrows } = await fetchMyRentals('me');
+    expect(borrows[0].pricePerDay).toBe(12.5);
+  });
+
+  it("carries the item's photo, falling back to the first of its photos", async () => {
+    mockFrom.mockReturnValue(makeChain({
+      data: [
+        rental({ id: 'r1', item: { id: 'i1', name: 'A', size_label: null, condition: null, photo_url: 'https://x/a.jpg', photo_urls: [] } }),
+        rental({ id: 'r2', item: { id: 'i2', name: 'B', size_label: null, condition: null, photo_url: null, photo_urls: ['https://x/b.jpg'] } }),
+        rental({ id: 'r3' }),
+      ],
+      error: null,
+    }));
+    const { borrows } = await fetchMyRentals('me');
+    expect(borrows.map((b) => b.itemPhoto)).toEqual(['https://x/a.jpg', 'https://x/b.jpg', undefined]);
+  });
 });
+
