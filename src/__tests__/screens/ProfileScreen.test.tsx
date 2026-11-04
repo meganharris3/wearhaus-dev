@@ -84,7 +84,14 @@ jest.mock('../../context/InstallPromptContext', () => ({
   }),
 }));
 
-import ProfileScreen from '../../screens/profile/ProfileScreen';
+let mockVisited: { profile: Record<string, unknown> | null; items: any[]; isLoading: boolean } =
+  { profile: null, items: [], isLoading: false };
+const mockUseVisitedProfile = jest.fn((..._args: unknown[]) => mockVisited);
+jest.mock('../../hooks/useVisitedProfile', () => ({
+  useVisitedProfile: (...args: unknown[]) => mockUseVisitedProfile(...args),
+}));
+
+import ProfileScreen, { UserProfileScreen } from '../../screens/profile/ProfileScreen';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -250,5 +257,63 @@ describe('ProfileScreen favorites', () => {
     await settle();
 
     expect(screen.getByText('No favorites yet')).toBeTruthy();
+  });
+});
+
+describe('Visitor profile (FriendProfile)', () => {
+  function renderVisitor(userId = 'u2') {
+    return render(
+      <UserProfileScreen
+        route={{ key: 'k', name: 'FriendProfile', params: { userId } }}
+        navigation={{} as never}
+      />,
+    );
+  }
+
+  beforeEach(() => {
+    mockUseVisitedProfile.mockClear();
+    mockVisited = {
+      profile: { id: 'u2', display_name: 'Jordan Lee', username: 'jordan', avatar_url: 'https://img/j.jpg', rating: 4.6 },
+      items: [
+        { id: 'i9', owner_id: 'u2', name: 'Denim Jacket', category: ['jacket'], size_label: ['M'], price_per_day: 1000, status: 'available', location_label: 'NYU', owner: { id: 'u2', display_name: 'Jordan Lee' } },
+      ],
+      isLoading: false,
+    };
+  });
+
+  it('loads the profile for the userId in the route, not your own', async () => {
+    renderVisitor('u2');
+    await settle();
+    expect(mockUseVisitedProfile).toHaveBeenCalledWith('u2', expect.objectContaining({ id: 'u1' }));
+  });
+
+  it('shows the name and username they chose', async () => {
+    renderVisitor();
+    await settle();
+    expect(screen.getAllByText('Jordan Lee').length).toBeGreaterThan(0);
+    expect(screen.getByText('@jordan')).toBeTruthy();
+    expect(screen.queryByText('Wearhaus User')).toBeNull();
+  });
+
+  it('shows their profile picture', async () => {
+    const { UNSAFE_getAllByType } = renderVisitor();
+    await settle();
+    const { Image } = require('react-native');
+    const uris = UNSAFE_getAllByType(Image).map((img: any) => img.props.source?.uri);
+    expect(uris).toContain('https://img/j.jpg');
+  });
+
+  it('shows the items in their closet', async () => {
+    renderVisitor();
+    await settle();
+    expect(screen.getByText('Denim Jacket')).toBeTruthy();
+    expect(screen.queryByText('No items yet')).toBeNull();
+  });
+
+  it('says "No ratings yet" instead of a made-up number for an unrated user', async () => {
+    mockVisited = { ...mockVisited, profile: { ...mockVisited.profile, rating: null } };
+    renderVisitor();
+    await settle();
+    expect(screen.getByText('No ratings yet')).toBeTruthy();
   });
 });

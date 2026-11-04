@@ -31,6 +31,7 @@ import type { AppStackParamList } from '../../navigation/AppStack';
 import type { Item } from '../../types';
 import { buildProfileUpdates } from '../../utils/profileUpdates';
 import { useInstallPrompt } from '../../context/InstallPromptContext';
+import { useVisitedProfile } from '../../hooks/useVisitedProfile';
 
 
 function getInitials(name: string): string {
@@ -464,18 +465,24 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
   const avatarUrl   = profile?.avatar_url ?? null;
   const rating      = profile?.rating ?? 4.9;
 
-  // Visitor data (look up from friends list, fall back to stubs)
+  // Visitor data — their real profile row and visible closet items
+  const visited = useVisitedProfile(isOwnProfile ? undefined : userId, {
+    id: user?.id ?? '', friends, hauses,
+  });
   const visitedFriend      = !isOwnProfile ? friends.find(f => f.id === userId) : null;
-  const visitorName        = visitedFriend?.name        ?? 'Wearhaus User';
-  const visitorHandle      = visitedFriend?.handle      ?? '@user';
-  const visitorInitials    = visitedFriend?.initials    ?? 'WU';
+  const visitorName        = visited.profile?.display_name ?? visitedFriend?.name ?? 'Wearhaus User';
+  const visitorHandle      = visited.profile?.username
+    ? `@${visited.profile.username}`
+    : visitedFriend?.handle ?? deriveHandle(visitorName);
+  const visitorInitials    = getInitials(visitorName);
+  const visitorAvatarUrl   = visited.profile?.avatar_url ?? visitedFriend?.avatar_url ?? null;
   const visitorAvatarColor = visitedFriend?.avatarColor ?? '#E2DED0';
 
   // Hero data (resolved to the right source)
   const heroName    = isOwnProfile ? displayName : visitorName;
   const heroHandle  = isOwnProfile ? handle      : visitorHandle;
-  const heroRating = isOwnProfile ? rating      : 4.8;
-  const heroItems  = isOwnProfile ? items.length : 8;
+  const heroRating = isOwnProfile ? rating      : visited.profile?.rating ?? 0;
+  const heroItems  = isOwnProfile ? items.length : visited.items.length;
 
   // Own-profile edit state
   const [isEditing,     setIsEditing]     = useState(false);
@@ -648,6 +655,11 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
                       source={{ uri: (localAvatar ?? avatarUrl)! }}
                       style={{ width: 64, height: 64, borderRadius: 32 }}
                     />
+                  ) : !isOwnProfile && visitorAvatarUrl ? (
+                    <Image
+                      source={{ uri: visitorAvatarUrl }}
+                      style={{ width: 64, height: 64, borderRadius: 32 }}
+                    />
                   ) : (
                     <Text style={{
                       fontFamily: 'Barlow_800ExtraBold',
@@ -801,8 +813,12 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
                     </TouchableOpacity>
                   ) : (
                     <Text style={{ fontFamily: 'Inter_300Light', fontSize: 11, color: 'rgba(255,255,255,0.5)' }}>
-                      <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#FDFBF4' }}>{heroRating}</Text>
-                      {' rating'}
+                      {heroRating > 0 ? (
+                        <>
+                          <Text style={{ fontFamily: 'Inter_600SemiBold', color: '#FDFBF4' }}>{heroRating}</Text>
+                          {' rating'}
+                        </>
+                      ) : 'No ratings yet'}
                     </Text>
                   )}
                 </View>
@@ -861,7 +877,8 @@ function UserProfileCore({ isOwnProfile, userId }: { isOwnProfile: boolean; user
 
           {/* Closet gallery */}
           <ClosetGallery
-            items={isOwnProfile ? items : []}
+            items={isOwnProfile ? items : visited.items}
+            emptyLabel={isOwnProfile || !visited.isLoading ? 'No items yet' : 'Loading…'}
             onItemPress={(item) => navigation.navigate('ItemDetail', { item })}
             onItemEdit={isOwnProfile ? (item) => navigation.navigate('AddItem', { item }) : undefined}
             onItemDelete={isOwnProfile ? (item) => {
