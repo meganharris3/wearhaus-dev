@@ -207,7 +207,7 @@ function TotalCard({ exchange, mode }: { exchange: BorrowRecord | LendRecord; mo
     <View style={[s.totalCard, { backgroundColor: cardBg }]}>
       <View style={s.totalCardTop}>
         <Text style={[s.totalCardLabel, { color: headColor }]}>
-          {isEarning ? "You'll Earn" : 'Total Paid'}
+          {isEarning ? "You'll Earn" : 'Total Due'}
         </Text>
         <TouchableOpacity onPress={() => setExpanded(e => !e)}>
           <Text style={[s.totalCardBreakdownLink, { color: linkColor }]}>Breakdown</Text>

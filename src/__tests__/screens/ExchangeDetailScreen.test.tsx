@@ -1,5 +1,5 @@
 /**
- * Tests for ExchangeDetailScreen's total card — whether it says "You'll Earn" or "Total Paid"
+ * Tests for ExchangeDetailScreen's total card — whether it says "You'll Earn" or "Total Due"
  * followed the `mode` route param, so a borrower who reached a rental by any route that passed
  * 'lending' would be told what they'd earn. It now follows which side of the rental they're on.
  */
@@ -43,7 +43,7 @@ import ExchangeDetailScreen from '../../screens/borrows/ExchangeDetailScreen';
 it('shows the borrower what they pay', () => {
   mockRouteParams = { exchangeId: 'r1', mode: 'borrowing' };
   render(<ExchangeDetailScreen />);
-  expect(screen.getByText(/Total Paid/i)).toBeTruthy();
+  expect(screen.getByText(/Total Due/i)).toBeTruthy();
   expect(screen.queryByText(/You'll Earn/i)).toBeNull();
 });
 
