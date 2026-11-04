@@ -1,9 +1,9 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert, Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
+import { useNavigation, useRoute, useFocusEffect, NavigationProp, RouteProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -292,14 +292,21 @@ function LendingHistoryRow({ lend }: { lend: LendRecord }) {
 
 export default function BorrowsDashboardScreen() {
   const nav = useNavigation<DashNavProp>();
+  const params = useRoute<RouteProp<AppStackParamList, 'BorrowsDashboard'>>().params;
   const { borrows, lends, updateBorrowStatus, cancelBorrow, refresh } = useBorrows();
 
   // Rentals otherwise load once at app start — re-fetch on every visit so a request
   // accepted since then (which creates the rental server-side) actually shows up.
   useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
   const { findThreadByUser, createDirectThread, sendMessage } = useMessages();
-  const [mode, setMode]           = useState<'borrowing' | 'lending'>('borrowing');
-  const [activeTab, setActiveTab] = useState<Tab>('Active');
+  const [mode, setMode]           = useState<'borrowing' | 'lending'>(params?.mode ?? 'borrowing');
+  const [activeTab, setActiveTab] = useState<Tab>(params?.tab ?? 'Active');
+
+  // Opened from a chat's request card while already on the stack: follow the new params.
+  useEffect(() => {
+    if (params?.mode) setMode(params.mode);
+    if (params?.tab) setActiveTab(params.tab);
+  }, [params?.mode, params?.tab]);
 
   function handleModeChange(m: 'borrowing' | 'lending') {
     setMode(m);

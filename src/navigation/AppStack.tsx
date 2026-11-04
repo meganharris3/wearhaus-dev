@@ -55,7 +55,7 @@ export type AppStackParamList = {
   Friends: undefined;
   FriendProfile: { userId: string };
   Messages: undefined;
-  BorrowsDashboard: undefined;
+  BorrowsDashboard: { mode?: 'borrowing' | 'lending'; tab?: 'Active' | 'Upcoming' | 'History' } | undefined;
   ExchangeDetail: { exchangeId: string; mode: 'borrowing' | 'lending' };
   ChatThread:
     | { threadId: string; pendingItem?: undefined; pendingOtherUser?: undefined }

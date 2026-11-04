@@ -9,7 +9,7 @@ import type { NativeStackScreenProps } from '@react-navigation/native-stack';
 import { theme } from '../../theme';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
-import { formatMessageTime } from '../../utils/dateUtils';
+import { formatMessageTime, toDateStr } from '../../utils/dateUtils';
 import type { AppStackParamList } from '../../navigation/AppStack';
 import type { ChatMessage, BorrowRequestPayload, CounterOfferPayload, Thread, Item } from '../../types';
 
@@ -136,7 +136,16 @@ function BorrowerWaiting({ lenderFirstName, onCancel }: { lenderFirstName: strin
   );
 }
 
-function BorrowerConfirmed({ payload }: { payload: BorrowRequestPayload }) {
+function DashboardLink({ label, onPress }: { label: string; onPress: () => void }) {
+  return (
+    <TouchableOpacity onPress={onPress} style={cardStyles.dashboardLink}>
+      <Text style={cardStyles.dashboardLinkText}>{label}</Text>
+      <Ionicons name="arrow-forward" size={11} color="#14120C" />
+    </TouchableOpacity>
+  );
+}
+
+function BorrowerConfirmed({ payload, onViewDashboard }: { payload: BorrowRequestPayload; onViewDashboard: () => void }) {
   return (
     <View style={cardStyles.confirmedWrap}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -146,11 +155,12 @@ function BorrowerConfirmed({ payload }: { payload: BorrowRequestPayload }) {
       <Text style={cardStyles.confirmedSub}>
         Meet {payload.lenderFirstName} at {payload.pickupMethod} on {formatDate(payload.startDate)}
       </Text>
+      <DashboardLink label="View in Borrowing" onPress={onViewDashboard} />
     </View>
   );
 }
 
-function LenderConfirmed({ payload }: { payload: BorrowRequestPayload }) {
+function LenderConfirmed({ payload, onViewDashboard }: { payload: BorrowRequestPayload; onViewDashboard: () => void }) {
   return (
     <View style={cardStyles.confirmedWrap}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -160,6 +170,7 @@ function LenderConfirmed({ payload }: { payload: BorrowRequestPayload }) {
       <Text style={cardStyles.confirmedSub}>
         Meet {payload.borrowerFirstName} at {payload.pickupMethod} on {formatDate(payload.startDate)}
       </Text>
+      <DashboardLink label="View in Lending" onPress={onViewDashboard} />
     </View>
   );
 }
@@ -180,12 +191,14 @@ function BorrowRequestCard({
   onDecline,
   onCounter,
   onCancel,
+  onViewDashboard,
 }: {
   msg: ChatMessage;
   onAccept: () => void;
   onDecline: () => void;
   onCounter: () => void;
   onCancel: () => void;
+  onViewDashboard: (mode: 'borrowing' | 'lending') => void;
 }) {
   const { user } = useAuth();
   const payload = msg.payload as BorrowRequestPayload;
@@ -206,8 +219,12 @@ function BorrowRequestCard({
       {payload.status === 'pending' && isBorrower && (
         <BorrowerWaiting lenderFirstName={payload.lenderFirstName} onCancel={onCancel} />
       )}
-      {payload.status === 'accepted' && isBorrower && <BorrowerConfirmed payload={payload} />}
-      {payload.status === 'accepted' && isLender   && <LenderConfirmed payload={payload} />}
+      {payload.status === 'accepted' && isBorrower && (
+        <BorrowerConfirmed payload={payload} onViewDashboard={() => onViewDashboard('borrowing')} />
+      )}
+      {payload.status === 'accepted' && isLender && (
+        <LenderConfirmed payload={payload} onViewDashboard={() => onViewDashboard('lending')} />
+      )}
       {payload.status === 'declined' && <DeclinedNote isLender={isLender} />}
 
       <Text style={cardStyles.timestamp}>{formatMessageTime(msg.timestamp)}</Text>
@@ -418,6 +435,13 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
     }
   }
 
+  function handleViewDashboard(msg: ChatMessage, mode: 'borrowing' | 'lending') {
+    const payload = msg.payload as BorrowRequestPayload;
+    // Same rule the database uses to create the rental (018): it's active once it has started.
+    const started = !payload.startDateISO || payload.startDateISO <= toDateStr(new Date());
+    navigation.navigate('BorrowsDashboard', { mode, tab: started ? 'Active' : 'Upcoming' });
+  }
+
   function handleCancel(msg: ChatMessage) {
     resolveRequest(msg, 'declined', 'Request cancelled');
   }
@@ -439,6 +463,7 @@ export default function ChatThreadScreen({ route, navigation }: Props) {
             onDecline={() => handleDecline(msg)}
             onCounter={() => handleCounter(msg)}
             onCancel={() => handleCancel(msg)}
+            onViewDashboard={(mode) => handleViewDashboard(msg, mode)}
           />
         );
       case 'counter_offer':
@@ -764,6 +789,25 @@ const cardStyles = StyleSheet.create({
     fontFamily: 'Inter_400Regular',
     fontSize: 11,
     color: '#14120C',
+  },
+  dashboardLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 4,
+    marginTop: 10,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    borderWidth: 1.5,
+    borderColor: '#14120C',
+    borderRadius: 2,
+  },
+  dashboardLinkText: {
+    fontFamily: 'Inter_600SemiBold',
+    fontSize: 10,
+    color: '#14120C',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   confirmedSub: {
     fontFamily: 'Inter_300Light',

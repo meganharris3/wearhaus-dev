@@ -6,10 +6,12 @@
 import React from 'react';
 import { render, screen, fireEvent } from '@testing-library/react-native';
 
+let mockRouteParams: Record<string, unknown> | undefined;
 jest.mock('@react-navigation/native', () => {
   const React = require('react');
   return {
     useNavigation: () => ({ navigate: jest.fn(), goBack: jest.fn() }),
+    useRoute: () => ({ key: 'k', name: 'BorrowsDashboard', params: mockRouteParams }),
     useFocusEffect: (cb: () => void) => { React.useEffect(cb, [cb]); },
   };
 });
@@ -41,6 +43,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   mockBorrows = [];
   mockLends = [];
+  mockRouteParams = undefined;
 });
 
 it('re-fetches rentals when the dashboard is opened', () => {
@@ -76,4 +79,16 @@ it('shows the price and item photo on an upcoming borrow', () => {
 
   expect(screen.getByText('$8.50/day')).toBeTruthy();
   expect(screen.getByTestId('item-photo').props.source).toEqual({ uri: 'https://x/jacket.jpg' });
+});
+
+it('opens on the lending side and tab it was navigated to', () => {
+  const inAWeek = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+  mockLends = [{
+    id: 'r2', itemId: 'i1', itemName: 'Silk Scarf', itemThumbColor: '#ddd',
+    borrowerId: 'b1', borrowerName: 'Sam Park', borrowerInitials: 'SP', borrowerAvatarColor: '#eee',
+    status: 'upcoming', pricePerDay: 5, startDate: inAWeek, endDate: inAWeek, threadId: 't1',
+  }];
+  mockRouteParams = { mode: 'lending', tab: 'Upcoming' };
+  render(<BorrowsDashboardScreen />);
+  expect(screen.getAllByText(/Silk Scarf/).length).toBeGreaterThan(0);
 });
