@@ -24,6 +24,11 @@ jest.mock('@react-navigation/native', () => ({
   useNavigation: () => ({ navigate: mockNavigate }),
 }));
 
+let mockCurrentUserId: string | undefined = 'me';
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: mockCurrentUserId ? { id: mockCurrentUserId } : null }),
+}));
+
 import ItemCard from '../../components/ItemCard';
 import type { Item } from '../../types';
 
@@ -45,6 +50,7 @@ describe('ItemCard', () => {
     mockToggleFavorite.mockClear();
     mockNavigate.mockClear();
     mockFavoritedIds = new Set();
+    mockCurrentUserId = 'me';
   });
 
   it('renders the item name in uppercase', () => {
@@ -56,6 +62,24 @@ describe('ItemCard', () => {
   it('renders owner display_name', () => {
     render(<ItemCard item={makeItem()} onPress={jest.fn()} />);
     expect(screen.getByText('Maya Chen')).toBeTruthy();
+  });
+
+  it('tapping the owner name navigates to their profile, not the card\'s own onPress', () => {
+    const onPress = jest.fn();
+    render(<ItemCard item={makeItem()} onPress={onPress} />);
+    fireEvent.press(screen.getByText('Maya Chen'), { stopPropagation: jest.fn() });
+
+    expect(mockNavigate).toHaveBeenCalledWith('FriendProfile', { userId: 'u1' });
+    expect(onPress).not.toHaveBeenCalled();
+  });
+
+  it('does not navigate when tapping your own name on your own item', () => {
+    mockCurrentUserId = 'u1'; // same as makeItem()'s owner_id
+    const onPress = jest.fn();
+    render(<ItemCard item={makeItem()} onPress={onPress} />);
+    fireEvent.press(screen.getByText('Maya Chen'), { stopPropagation: jest.fn() });
+
+    expect(mockNavigate).not.toHaveBeenCalled();
   });
 
   it('renders formatted price per day', () => {
@@ -116,6 +140,7 @@ describe('ItemCard favoriting', () => {
     mockToggleFavorite.mockClear();
     mockNavigate.mockClear();
     mockFavoritedIds = new Set();
+    mockCurrentUserId = 'me';
   });
 
   it('shows an outline heart when the item is not favorited', () => {
@@ -159,6 +184,7 @@ describe('ItemCard comments', () => {
     mockToggleFavorite.mockClear();
     mockNavigate.mockClear();
     mockFavoritedIds = new Set();
+    mockCurrentUserId = 'me';
   });
 
   it('renders a comment icon', () => {

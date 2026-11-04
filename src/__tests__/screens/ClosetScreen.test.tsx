@@ -22,6 +22,9 @@ let mockItems: any[] = [];
 jest.mock('../../context/ClosetContext', () => ({
   useCloset: () => ({ items: mockItems, deleteItem: jest.fn() }),
 }));
+jest.mock('../../context/AuthContext', () => ({
+  useAuth: () => ({ user: { id: 'me' } }),
+}));
 jest.mock('../../context/BoardsContext', () => ({
   useBoards: () => ({ boards: [] }),
 }));

@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { theme } from '../theme';
 import StatusTag from './StatusTag';
 import { useInteractions } from '../context/InteractionsContext';
+import { useAuth } from '../context/AuthContext';
 import type { AppStackParamList } from '../navigation/AppStack';
 import type { Item, VisibilityMode } from '../types';
 
@@ -40,12 +41,20 @@ interface ItemCardProps {
 function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
   const priceFormatted = `$${(item.price_per_day / 100).toFixed(2)}/day`;
   const { isFavorited, toggleFavorite } = useInteractions();
+  const { user } = useAuth();
   const navigation = useNavigation<NativeStackNavigationProp<AppStackParamList>>();
   const liked = isFavorited(item.id);
+  const isOwnItem = item.owner_id === user?.id;
 
   function openComments(e: { stopPropagation: () => void }) {
     e.stopPropagation();
     navigation.navigate('ItemComments', { item });
+  }
+
+  function openOwnerProfile(e: { stopPropagation: () => void }) {
+    e.stopPropagation();
+    if (isOwnItem) return; // your own name on your own item — nothing to navigate to
+    navigation.navigate('FriendProfile', { userId: item.owner_id });
   }
 
   return (
@@ -84,9 +93,11 @@ function ItemCard({ item, onPress, onEdit, onDelete }: ItemCardProps) {
         <View style={styles.bodyInner}>
           <View style={{ flex: 1 }}>
             <Text style={styles.itemName} numberOfLines={1}>{item.name}</Text>
-            <Text style={styles.lenderName} numberOfLines={1}>
-              {item.owner?.display_name ?? ''}
-            </Text>
+            <Pressable onPress={openOwnerProfile} hitSlop={4} disabled={isOwnItem}>
+              <Text style={styles.lenderName} numberOfLines={1}>
+                {item.owner?.display_name ?? ''}
+              </Text>
+            </Pressable>
             <View style={styles.priceRow}>
               <Text style={styles.price}>{priceFormatted}</Text>
               <Text style={styles.size}>{item.size_label?.join(', ')}</Text>

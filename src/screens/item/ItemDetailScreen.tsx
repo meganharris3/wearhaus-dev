@@ -47,6 +47,11 @@ export default function ItemDetailScreen({ route }: Props) {
   const ownerInitials  = getInitials(ownerName);
   const ownerRating    = item.owner?.rating ?? 4.9;
   const isOwner        = item.owner_id === 'me' || (user != null && item.owner_id === user.id);
+
+  function goToOwnerProfile() {
+    if (isOwner) return; // your own item — nothing to navigate to
+    navigation.navigate('FriendProfile', { userId: item.owner_id });
+  }
   const favorited      = isFavorited(item.id);
   const likes          = favoriteCount(item.id);
   const comments       = getComments(item.id);
@@ -165,7 +170,9 @@ export default function ItemDetailScreen({ route }: Props) {
             </Pressable>
           </View>
 
-          <Text style={styles.lenderText}>Listed by {ownerName}</Text>
+          <Pressable onPress={goToOwnerProfile} disabled={isOwner} hitSlop={4}>
+            <Text style={styles.lenderText}>Listed by {ownerName}</Text>
+          </Pressable>
           <View style={styles.divider} />
 
           <View style={styles.priceRow}>
@@ -225,7 +232,7 @@ export default function ItemDetailScreen({ route }: Props) {
           <View style={styles.divider} />
 
           {/* Lender card */}
-          <View style={styles.lenderCard}>
+          <Pressable style={styles.lenderCard} onPress={goToOwnerProfile} disabled={isOwner}>
             <View style={styles.lenderAvatar}>
               <Text style={styles.lenderAvatarText}>{ownerInitials}</Text>
             </View>
@@ -233,7 +240,7 @@ export default function ItemDetailScreen({ route }: Props) {
               <Text style={styles.lenderName}>{ownerName}</Text>
               <Text style={styles.lenderRating}>⭐ {ownerRating}</Text>
             </View>
-          </View>
+          </Pressable>
 
           <View style={styles.divider} />
 
