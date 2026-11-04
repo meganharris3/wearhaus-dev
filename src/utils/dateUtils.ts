@@ -13,6 +13,15 @@ export function parseDate(str: string): Date {
   return new Date(y, m - 1, d);
 }
 
+/** Format as 'YYYY-MM-DD' in local time — the inverse of parseDate. Not toISOString(), which
+ *  converts to UTC first and shifts evening dates to the next day west of Greenwich. */
+export function toDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 /** Normalize a Date to midnight local time */
 export function startOfDay(d: Date): Date {
   return new Date(d.getFullYear(), d.getMonth(), d.getDate());

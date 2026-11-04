@@ -11,7 +11,7 @@ import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AvailabilityRange, ThreadParticipant } from '../../types';
 import {
   parseDate, formatRange, formatDateShort,
-  diffInDays, addMonths,
+  diffInDays, addMonths, toDateStr, isSameDay,
 } from '../../utils/dateUtils';
 import { useMessages } from '../../context/MessagesContext';
 import { useAuth } from '../../context/AuthContext';
@@ -95,6 +95,9 @@ export default function DatePickerScreen({ route, navigation }: Props) {
           },
           startDate: formatDateShort(selectedStart!),
           endDate: formatDateShort(selectedEnd!),
+          startDateISO: toDateStr(selectedStart!),
+          endDateISO: toDateStr(selectedEnd!),
+          itemId: item.id,
           days,
           pricePerDay: dailyRate,
           pickupMethod: 'Campus Pickup',
@@ -167,8 +170,10 @@ export default function DatePickerScreen({ route, navigation }: Props) {
           <View style={styles.rangePill}>
             <Text style={styles.rangePillText}>
               {selectedEnd
-                ? formatRange(selectedStart, selectedEnd)
-                : `${formatDateShort(selectedStart)} – select end date`}
+                ? (isSameDay(selectedStart, selectedEnd)
+                    ? formatDateShort(selectedStart)
+                    : formatRange(selectedStart, selectedEnd))
+                : `${formatDateShort(selectedStart)} – tap an end date, or the same day for 1 day`}
             </Text>
             {hasRange && (
               <Text style={styles.rangePillMeta}>
@@ -183,7 +188,7 @@ export default function DatePickerScreen({ route, navigation }: Props) {
           <>
             <SectionHeader label="Booking Summary" />
             <View style={styles.summaryCard}>
-              <SummaryRow label={`${days} days × $${dailyRate.toFixed(2)}/day`} value={`$${subtotal.toFixed(2)}`} />
+              <SummaryRow label={`${days} day${days !== 1 ? 's' : ''} × $${dailyRate.toFixed(2)}/day`} value={`$${subtotal.toFixed(2)}`} />
               <SummaryRow label="Service fee (7%)" value={`$${serviceFee.toFixed(2)}`} />
               <SummaryRow label="Refundable deposit" value={`$${deposit.toFixed(2)}`} />
               <View style={styles.summaryDivider} />

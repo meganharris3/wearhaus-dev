@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import {
   View, Text, ScrollView, TouchableOpacity, StyleSheet, Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useNavigation, NavigationProp } from '@react-navigation/native';
+import { useNavigation, useFocusEffect, NavigationProp } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import { MaterialCommunityIcons } from '@expo/vector-icons';
 import {
@@ -279,7 +279,11 @@ function LendingHistoryRow({ lend }: { lend: LendRecord }) {
 
 export default function BorrowsDashboardScreen() {
   const nav = useNavigation<DashNavProp>();
-  const { borrows, lends, updateBorrowStatus, cancelBorrow } = useBorrows();
+  const { borrows, lends, updateBorrowStatus, cancelBorrow, refresh } = useBorrows();
+
+  // Rentals otherwise load once at app start — re-fetch on every visit so a request
+  // accepted since then (which creates the rental server-side) actually shows up.
+  useFocusEffect(useCallback(() => { refresh(); }, [refresh]));
   const { findThreadByUser, createDirectThread, sendMessage } = useMessages();
   const [mode, setMode]           = useState<'borrowing' | 'lending'>('borrowing');
   const [activeTab, setActiveTab] = useState<Tab>('Active');

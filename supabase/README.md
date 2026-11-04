@@ -23,7 +23,8 @@ supabase/
 │   ├── 014_add_interactions_and_notifications.sql # favorites, comments, notifications + triggers
 │   ├── 015_add_campus_otp.sql                     # campus_otp_verifications, send/verify RPCs
 │   ├── 016_multi_select_item_fields.sql           # items.category/size_label: text -> text[]
-│   └── 017_haus_invitations.sql                   # haus_invitations, invite/accept triggers
+│   ├── 017_haus_invitations.sql                   # haus_invitations, invite/accept triggers
+│   └── 018_rental_on_borrow_accept.sql            # accepting a borrow request creates the rental
 ├── seed.sql                         # Test data (dev/preview only)
 ├── monitoring.sql                   # Health check views
 └── README.md                        # This file
@@ -49,7 +50,7 @@ cat supabase/migrations/001_initial_schema.sql | pbcopy
 cat supabase/migrations/002_security_fixes.sql | pbcopy
 # Paste in SQL Editor, run
 
-# Steps 3-17: repeat for 003 ... 017, strictly in numeric order
+# Steps 3-18: repeat for 003 ... 018, strictly in numeric order
 
 # Last: run seed (optional, dev only — after ALL migrations)
 cat supabase/seed.sql | pbcopy

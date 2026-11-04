@@ -103,8 +103,8 @@ export default function WearCalendar({
       // start selected, no end
       const s = startOfDay(selectedStart);
       if (isSameDay(d, s)) {
-        // tapping same start = deselect
-        onSelectStart(d);
+        // tapping the start again = a single-day range (start = end)
+        onSelectEnd(d);
         return;
       }
       if (d > s && !rangeHasConflict(s, d, bookedRanges)) {

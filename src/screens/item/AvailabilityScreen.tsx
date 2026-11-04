@@ -12,7 +12,7 @@ import type { AppStackParamList } from '../../navigation/AppStack';
 import type { AvailabilityRange } from '../../types';
 import {
   parseDate, formatRange, formatDateShort,
-  addMonths,
+  addMonths, toDateStr,
 } from '../../utils/dateUtils';
 
 type Props = NativeStackScreenProps<AppStackParamList, 'Availability'>;
@@ -259,14 +259,6 @@ function SectionHeader({ label }: { label: string }) {
       <Text style={styles.sectionHeaderText}>{label.toUpperCase()}</Text>
     </View>
   );
-}
-
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-function toDateStr(d: Date): string {
-  const y = d.getFullYear();
-  const m = String(d.getMonth() + 1).padStart(2, '0');
-  const day = String(d.getDate()).padStart(2, '0');
-  return `${y}-${m}-${day}`;
 }
 
 // ─── Styles ──────────────────────────────────────────────────────────────────

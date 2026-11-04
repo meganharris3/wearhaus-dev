@@ -1,4 +1,4 @@
-import { formatMessageTime } from '../../utils/dateUtils';
+import { formatMessageTime, toDateStr, parseDate } from '../../utils/dateUtils';
 
 const now = new Date(2026, 8, 21, 15, 30, 0); // Sep 21 2026, 3:30 PM local
 
@@ -31,5 +31,19 @@ describe('formatMessageTime', () => {
 
   it('returns an empty string for an unparseable value', () => {
     expect(formatMessageTime('not-a-date', now)).toBe('');
+  });
+});
+
+describe('toDateStr', () => {
+  it('formats a local date as YYYY-MM-DD, zero-padded', () => {
+    expect(toDateStr(new Date(2026, 0, 5))).toBe('2026-01-05');
+  });
+
+  it('uses the local calendar day even late in the evening (no UTC shift)', () => {
+    expect(toDateStr(new Date(2026, 10, 3, 23, 30))).toBe('2026-11-03');
+  });
+
+  it('round-trips with parseDate', () => {
+    expect(toDateStr(parseDate('2026-12-31'))).toBe('2026-12-31');
   });
 });

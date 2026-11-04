@@ -155,8 +155,13 @@ export interface BorrowRequestPayload {
     thumbColor: string;
     photo: string | null;
   };
-  startDate: string;
-  endDate: string;
+  startDate: string;     // display only, e.g. 'Nov 3' — no year
+  endDate: string;       // display only
+  /** 'YYYY-MM-DD'. What the rentals row is built from when the request is accepted. Optional
+   *  only because requests sent before this existed don't have it. */
+  startDateISO?: string;
+  endDateISO?: string;
+  itemId?: string;
   days: number;
   pricePerDay: number;   // dollars
   pickupMethod: string;
