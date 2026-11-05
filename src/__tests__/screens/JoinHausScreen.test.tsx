@@ -14,6 +14,9 @@ const mockRefreshHauses = jest.fn().mockResolvedValue(undefined);
 jest.mock('../../context/HausesContext', () => ({
   useHauses: () => ({ refreshHauses: mockRefreshHauses }),
 }));
+jest.mock('../../context/FriendsContext', () => ({
+  useFriends: () => ({ friends: [{ id: 'f1', name: 'Jordan Lee', handle: '@jordan', initials: 'JL' }] }),
+}));
 const mockConfirm = jest.fn();
 jest.mock('../../context/ConfirmationContext', () => ({
   useConfirmation: () => mockConfirm,
@@ -21,7 +24,9 @@ jest.mock('../../context/ConfirmationContext', () => ({
 
 const mockPreview = jest.fn();
 const mockJoin = jest.fn();
+const mockMembers = jest.fn();
 jest.mock('../../services/hausService', () => ({
+  fetchAllHausMembers: (...a: unknown[]) => mockMembers(...a),
   fetchHausInvitePreview: (...a: unknown[]) => mockPreview(...a),
   joinHausByInviteCode: (...a: unknown[]) => mockJoin(...a),
 }));
@@ -33,6 +38,7 @@ const haus = { id: 'h1', name: 'Alpha Phi Closet', description: 'Our closet', me
 beforeEach(() => {
   jest.clearAllMocks();
   mockJoin.mockResolvedValue('h1');
+  mockMembers.mockResolvedValue([]);
 });
 
 async function renderScreen() {
@@ -48,6 +54,32 @@ it('shows the haus the link is for', async () => {
   expect(screen.getByText("YOU'RE INVITED TO")).toBeTruthy();
   expect(screen.getByText('Alpha Phi Closet')).toBeTruthy();
   expect(screen.getByText('3 members · 12 pieces')).toBeTruthy();
+  // the haus's own description isn't shown
+  expect(screen.queryByText('Our closet')).toBeNull();
+});
+
+it('shows friends already in the haus, and opens their profile', async () => {
+  mockPreview.mockResolvedValue({ ...haus, is_member: false });
+  mockMembers.mockResolvedValue([
+    { userId: 'f1', role: 'member', joinedAt: '', displayName: 'Jordan Lee' },
+    { userId: 'stranger', role: 'admin', joinedAt: '', displayName: 'Sam Stranger' },
+  ]);
+  await renderScreen();
+
+  expect(mockMembers).toHaveBeenCalledWith('h1');
+  expect(screen.getByText('1 FRIEND IS HERE')).toBeTruthy();
+  expect(screen.queryByText('Sam')).toBeNull();
+
+  fireEvent.press(screen.getByLabelText("View Jordan Lee's profile"));
+  expect(mockNav.navigate).toHaveBeenCalledWith('FriendProfile', { userId: 'f1' });
+});
+
+it('shows no friends section when no friends are members', async () => {
+  mockPreview.mockResolvedValue({ ...haus, is_member: false });
+  mockMembers.mockResolvedValue([{ userId: 'stranger', role: 'admin', joinedAt: '', displayName: 'Sam Stranger' }]);
+  await renderScreen();
+
+  expect(screen.queryByText(/FRIENDS? (IS|ARE) HERE/)).toBeNull();
 });
 
 it('joins, refreshes the haus list, confirms, and opens the haus', async () => {
