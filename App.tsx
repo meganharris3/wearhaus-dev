@@ -10,10 +10,12 @@ import RootNavigator from './src/navigation/RootNavigator';
 import { InstallPromptProvider } from './src/context/InstallPromptContext';
 import { ConfirmationProvider } from './src/context/ConfirmationContext';
 import { registerServiceWorker } from './src/lib/registerServiceWorker';
+import { capturePendingInvite } from './src/utils/hausInvite';
 import './src/lib/webAlert'; // makes Alert.alert work on web (React Native Web's is a no-op)
 
 SplashScreen.preventAutoHideAsync();
 registerServiceWorker(); // web + production only — see the function for the full gate
+capturePendingInvite(); // opened at /join/<code>? hold onto it until the user's signed in
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({

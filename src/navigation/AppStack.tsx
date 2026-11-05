@@ -11,6 +11,7 @@ import RequestsScreen from '../screens/closet/RequestsScreen';
 import HausesScreen from '../screens/hauses/HausesScreen';
 import CreateHausScreen from '../screens/hauses/CreateHausScreen';
 import HausDetailScreen from '../screens/hauses/HausDetailScreen';
+import JoinHausScreen from '../screens/hauses/JoinHausScreen';
 import BoardDetailScreen from '../screens/boards/BoardDetailScreen';
 import CreateBoardScreen from '../screens/boards/CreateBoardScreen';
 import AddItemsToBoardScreen from '../screens/boards/AddItemsToBoardScreen';
@@ -46,6 +47,7 @@ export type AppStackParamList = {
   Requests: undefined;
   CreateHaus: undefined;
   HausDetail: { haus: Haus };
+  JoinHaus: { code: string };
   CollectionDetail: { collectionId: string };
   CreateCollection: { hausId: string };
   AddItemsToCollection: { collectionId: string };
@@ -88,6 +90,7 @@ export default function AppStack() {
           <Stack.Screen name="Requests"         component={RequestsScreen} />
           <Stack.Screen name="CreateHaus"       component={CreateHausScreen} />
           <Stack.Screen name="HausDetail"           component={HausDetailScreen} />
+          <Stack.Screen name="JoinHaus"             component={JoinHausScreen} />
           <Stack.Screen name="CollectionDetail"     component={CollectionDetailScreen} />
           <Stack.Screen name="CreateCollection"     component={CreateCollectionScreen} options={{ presentation: 'transparentModal', animation: 'slide_from_bottom' }} />
           <Stack.Screen name="AddItemsToCollection" component={AddItemsToCollectionScreen} />

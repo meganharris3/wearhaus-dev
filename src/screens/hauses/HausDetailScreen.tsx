@@ -12,6 +12,7 @@ import {
   ToastAndroid,
   TouchableOpacity,
   Image,
+  Share,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation, useRoute } from '@react-navigation/native';
@@ -21,18 +22,22 @@ import * as Clipboard from 'expo-clipboard';
 import { theme } from '../../theme';
 import StatusTag from '../../components/StatusTag';
 import Chip from '../../components/Chip';
+import PressableScale from '../../components/PressableScale';
 import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
 import { useAuth } from '../../context/AuthContext';
+import { useFriends } from '../../context/FriendsContext';
+import { useConfirmation } from '../../context/ConfirmationContext';
 import {
   useHausCollections,
   type HausCollection,
 } from '../../context/HausCollectionsContext';
-import { fetchMembershipRole, fetchAllHausMembers, type HausMemberRow } from '../../services/hausService';
-import type { Item } from '../../types';
+import {
+  fetchMembershipRole, fetchAllHausMembers, fetchHausInviteCode, inviteMembersToHaus, type HausMemberRow,
+} from '../../services/hausService';
+import { hausInviteUrl } from '../../utils/hausInvite';
+import type { Item, Friend } from '../../types';
 import type { AppStackParamList } from '../../navigation/AppStack';
-
-const INVITE_LINK = 'wearhaus.app/join/';
 
 type ItemFilter = 'all' | 'mine' | 'available';
 type Tab = 'items' | 'collections' | 'members';
@@ -371,6 +376,55 @@ function HausMembersList({ members, myId }: { members: HausMemberRow[]; myId?: s
   );
 }
 
+// ─── InviteFriendsList — pick friends to send in-app haus invites to ─────────
+
+function InviteFriendsList({ friends, selectedIds, invitedIds, onToggle }: {
+  friends: Friend[]; selectedIds: string[]; invitedIds: string[]; onToggle: (id: string) => void;
+}) {
+  if (friends.length === 0) {
+    return <Text style={mem.empty}>All your friends are already here.</Text>;
+  }
+  return (
+    <View style={{ paddingTop: 4 }}>
+      {friends.map(f => {
+        const invited  = invitedIds.includes(f.id);
+        const selected = selectedIds.includes(f.id);
+        return (
+          <Pressable
+            key={f.id}
+            style={mem.row}
+            onPress={() => onToggle(f.id)}
+            disabled={invited}
+            accessibilityRole="checkbox"
+            accessibilityState={{ checked: selected || invited, disabled: invited }}
+          >
+            <View style={mem.avatar}>
+              {f.avatar_url ? (
+                <Image source={{ uri: f.avatar_url }} style={mem.avatarImg} resizeMode="cover" />
+              ) : (
+                <Text style={mem.initials}>{f.initials}</Text>
+              )}
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={mem.name}>{f.name}</Text>
+              <Text style={mem.handle}>{f.handle}</Text>
+            </View>
+            {invited ? (
+              <View style={mem.youBadge}>
+                <Text style={mem.youBadgeText}>INVITED</Text>
+              </View>
+            ) : (
+              <View style={[mem.selectDot, selected && mem.selectDotActive]}>
+                {selected && <Ionicons name="checkmark" size={12} color={theme.colors.yellowText} />}
+              </View>
+            )}
+          </Pressable>
+        );
+      })}
+    </View>
+  );
+}
+
 // ─── Main Screen ─────────────────────────────────────────────────────────────
 
 export default function HausDetailScreen() {
@@ -380,6 +434,8 @@ export default function HausDetailScreen() {
   const { items: allItems, updateItem } = useCloset();
   const { leaveHaus, renameHaus } = useHauses();
   const { user, profile } = useAuth();
+  const { friends } = useFriends();
+  const confirm = useConfirmation();
   const { getCollectionsForHaus, loadCollectionsForHaus } = useHausCollections();
 
   const [activeTab,    setActiveTab]    = useState<Tab>('items');
@@ -392,6 +448,22 @@ export default function HausDetailScreen() {
   const [nameInput,     setNameInput]     = useState(haus.name);
   const [isOwner,       setIsOwner]       = useState(false);
   const [members, setMembers] = useState<HausMemberRow[]>([]);
+  // undefined while loading; null if the haus has none (campus closets — see 019's migration)
+  const [inviteCode, setInviteCode] = useState<string | null | undefined>(undefined);
+  const [inviteCodeFailed, setInviteCodeFailed] = useState(false);
+  const [selectedInvitees, setSelectedInvitees] = useState<string[]>([]);
+  const [invitedIds,       setInvitedIds]       = useState<string[]>([]);
+  const [sendingInvites,   setSendingInvites]   = useState(false);
+
+  // Fetched up front, not when Copy is tapped: a browser only allows a clipboard write
+  // straight from the tap, not after waiting on the network.
+  useEffect(() => {
+    let cancelled = false;
+    fetchHausInviteCode(haus.id)
+      .then(code => { if (!cancelled) setInviteCode(code); })
+      .catch(() => { if (!cancelled) setInviteCodeFailed(true); });
+    return () => { cancelled = true; };
+  }, [haus.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -434,10 +506,46 @@ export default function HausDetailScreen() {
     try { await renameHaus(haus.id, trimmed); } catch { setLocalName(prev); }
   }
 
+  const inviteLink = inviteCode ? hausInviteUrl(inviteCode) : null;
+  const invitesClosed = inviteCode === null;
+  const memberIds = new Set(members.map(m => m.userId));
+  const invitableFriends = friends.filter(f => !memberIds.has(f.id));
+
   async function handleCopyLink() {
-    const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
+    if (!inviteLink) return;
     await Clipboard.setStringAsync(inviteLink);
-    showToast('Link copied!');
+    confirm('Link copied');
+  }
+
+  async function handleShareLink() {
+    if (!inviteLink) return;
+    try {
+      await Share.share({ message: `Join ${localName} on Wearhaus: ${inviteLink}`, url: inviteLink });
+    } catch {
+      // No share sheet (most desktop browsers) — copying is the next best thing.
+      await handleCopyLink();
+    }
+  }
+
+  function toggleInvitee(friendId: string) {
+    setSelectedInvitees(prev =>
+      prev.includes(friendId) ? prev.filter(id => id !== friendId) : [...prev, friendId],
+    );
+  }
+
+  async function handleSendInvites() {
+    if (!user?.id || selectedInvitees.length === 0 || sendingInvites) return;
+    setSendingInvites(true);
+    try {
+      await inviteMembersToHaus(haus.id, user.id, selectedInvitees);
+      setInvitedIds(prev => [...prev, ...selectedInvitees]);
+      confirm(selectedInvitees.length === 1 ? 'Invite sent' : `${selectedInvitees.length} invites sent`);
+      setSelectedInvitees([]);
+    } catch {
+      showToast("Couldn't send invites. Try again.");
+    } finally {
+      setSendingInvites(false);
+    }
   }
 
   async function confirmLeave() {
@@ -455,8 +563,6 @@ export default function HausDetailScreen() {
       setIsLeaving(false);
     }
   }
-
-  const inviteLink = INVITE_LINK + localName.toLowerCase().replace(/\s+/g, '-').slice(0, 16);
 
   return (
     <SafeAreaView style={styles.safe} edges={['top']}>
@@ -574,29 +680,65 @@ export default function HausDetailScreen() {
 
             <HausMembersList members={members} myId={user?.id} />
 
-            <View style={modal.sectionHeader}>
-              <Text style={modal.sectionLabel}>SHARE INVITE</Text>
-            </View>
+            {invitesClosed ? (
+              <Text style={modal.closedNote}>
+                Campus closets are for verified students — they join from their own campus page.
+              </Text>
+            ) : (
+              <>
+                <View style={modal.sectionHeader}>
+                  <Text style={modal.sectionLabel}>INVITE FRIENDS</Text>
+                </View>
 
-            <View style={modal.shareRow}>
-              {[
-                { icon: 'link-outline' as const,         label: 'Copy Link', onPress: handleCopyLink },
-                { icon: 'qr-code-outline' as const,      label: 'QR Code',   onPress: () => showToast('Coming soon') },
-                { icon: 'share-social-outline' as const, label: 'Story',     onPress: () => showToast('Coming soon') },
-              ].map(({ icon, label, onPress }) => (
-                <Pressable key={label} style={modal.shareBtn} onPress={onPress}>
-                  <Ionicons name={icon} size={18} color={theme.colors.ink} />
-                  <Text style={modal.shareBtnText}>{label.toUpperCase()}</Text>
-                </Pressable>
-              ))}
-            </View>
+                <InviteFriendsList
+                  friends={invitableFriends}
+                  selectedIds={selectedInvitees}
+                  invitedIds={invitedIds}
+                  onToggle={toggleInvitee}
+                />
 
-            <View style={modal.linkPill}>
-              <Text style={modal.linkText} numberOfLines={1}>{inviteLink}</Text>
-              <Pressable onPress={handleCopyLink}>
-                <Text style={modal.linkCopy}>COPY</Text>
-              </Pressable>
-            </View>
+                {selectedInvitees.length > 0 && (
+                  <PressableScale
+                    style={[modal.sendBtn, sendingInvites && { opacity: 0.6 }]}
+                    onPress={handleSendInvites}
+                    disabled={sendingInvites}
+                    scaleTo={0.97}
+                  >
+                    <Text style={modal.sendBtnText}>
+                      {sendingInvites
+                        ? 'SENDING…'
+                        : `SEND ${selectedInvitees.length} INVITE${selectedInvitees.length !== 1 ? 'S' : ''}`}
+                    </Text>
+                  </PressableScale>
+                )}
+
+                <View style={[modal.sectionHeader, { marginTop: 14 }]}>
+                  <Text style={modal.sectionLabel}>SHARE INVITE LINK</Text>
+                </View>
+
+                <View style={modal.shareRow}>
+                  {[
+                    { icon: 'link-outline' as const,         label: 'Copy Link', onPress: handleCopyLink },
+                    { icon: 'qr-code-outline' as const,      label: 'QR Code',   onPress: () => showToast('Coming soon') },
+                    { icon: 'share-social-outline' as const, label: 'Share',     onPress: handleShareLink },
+                  ].map(({ icon, label, onPress }) => (
+                    <Pressable key={label} style={modal.shareBtn} onPress={onPress}>
+                      <Ionicons name={icon} size={18} color={theme.colors.ink} />
+                      <Text style={modal.shareBtnText}>{label.toUpperCase()}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+
+                <View style={modal.linkPill}>
+                  <Text style={modal.linkText} numberOfLines={1}>
+                    {inviteLink ?? (inviteCodeFailed ? "Couldn't load the invite link" : 'Loading link…')}
+                  </Text>
+                  <Pressable onPress={handleCopyLink} disabled={!inviteLink}>
+                    <Text style={[modal.linkCopy, !inviteLink && { opacity: 0.4 }]}>COPY</Text>
+                  </Pressable>
+                </View>
+              </>
+            )}
 
             <Pressable style={modal.doneBtn} onPress={() => setInviteVisible(false)}>
               <Text style={modal.doneBtnText}>DONE</Text>
@@ -938,6 +1080,12 @@ const mem = StyleSheet.create({
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 8,
     color: theme.colors.yellowText, letterSpacing: 1,
   },
+  selectDot: {
+    width: 22, height: 22, borderRadius: 11,
+    borderWidth: 1.5, borderColor: theme.colors.ink,
+    alignItems: 'center', justifyContent: 'center',
+  },
+  selectDotActive: { backgroundColor: theme.colors.yellow },
 });
 
 const modal = StyleSheet.create({
@@ -962,6 +1110,22 @@ const modal = StyleSheet.create({
   sectionLabel: {
     fontFamily: theme.fonts.barlowExtraBold, fontSize: 9,
     color: theme.colors.ink, letterSpacing: 1.5,
+  },
+
+  closedNote: {
+    fontFamily: theme.fonts.interRegular, fontSize: 12, lineHeight: 18,
+    color: theme.colors.muted, textAlign: 'center',
+    paddingHorizontal: 28, paddingVertical: 24,
+  },
+
+  sendBtn: {
+    marginHorizontal: 18, marginTop: 14, backgroundColor: theme.colors.yellow,
+    borderWidth: 1.5, borderColor: theme.colors.yellowBorder,
+    borderRadius: theme.borderRadius, paddingVertical: 12, alignItems: 'center',
+  },
+  sendBtnText: {
+    fontFamily: theme.fonts.barlowExtraBold, fontSize: 12,
+    color: theme.colors.yellowText, letterSpacing: 1.2,
   },
 
   shareRow: { flexDirection: 'row', paddingHorizontal: 18, gap: 8, marginBottom: 12 },

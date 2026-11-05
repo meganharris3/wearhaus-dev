@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { useAuth } from '../context/AuthContext';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
 import { theme } from '../theme';
 import AuthStack from './AuthStack';
 import AppStack from './AppStack';
+import type { AppStackParamList } from './AppStack';
+import { takePendingInvite } from '../utils/hausInvite';
 import OnboardingScreen from '../screens/onboarding/OnboardingScreen';
 import { useDevAutoSignIn } from '../hooks/useDevAutoSignIn';
 
@@ -51,10 +53,19 @@ export default function RootNavigator() {
   }
 
   return (
-    <NavigationContainer>
+    <NavigationContainer ref={navigationRef} onReady={openPendingInvite}>
       <AppStack />
     </NavigationContainer>
   );
+}
+
+const navigationRef = createNavigationContainerRef<AppStackParamList>();
+
+// An invite link opened before sign-in was stashed by capturePendingInvite; now that the
+// signed-in app is up, show its join screen.
+function openPendingInvite() {
+  const code = takePendingInvite();
+  if (code && navigationRef.isReady()) navigationRef.navigate('JoinHaus', { code });
 }
 
 const styles = StyleSheet.create({

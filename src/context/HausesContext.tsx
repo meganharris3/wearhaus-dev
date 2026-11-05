@@ -14,6 +14,8 @@ interface HausesContextValue {
   addHaus: (haus: Haus) => Promise<Haus>;
   leaveHaus: (hausId: string) => Promise<void>;
   renameHaus: (hausId: string, name: string) => Promise<void>;
+  /** Re-fetches the user's hauses — after joining one by invite link, say. */
+  refreshHauses: () => Promise<void>;
   isLoading: boolean;
 }
 
@@ -83,6 +85,12 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
     await AsyncStorage.setItem(key, JSON.stringify(updated)).catch(() => {});
   }
 
+  async function refreshHauses() {
+    if (!user?.id) return;
+    const remote = await fetchMyHauses(user.id).catch(() => null);
+    if (remote) setHauses(remote);
+  }
+
   async function leaveHaus(hausId: string) {
     if (user?.id) {
       try { await leaveHausRemote(hausId, user.id); } catch { /* continue with local removal */ }
@@ -95,7 +103,7 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
   }
 
   return (
-    <HausesContext.Provider value={{ hauses, addHaus, leaveHaus, renameHaus, isLoading }}>
+    <HausesContext.Provider value={{ hauses, addHaus, leaveHaus, renameHaus, refreshHauses, isLoading }}>
       {children}
     </HausesContext.Provider>
   );

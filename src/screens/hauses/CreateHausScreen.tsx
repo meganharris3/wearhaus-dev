@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,6 @@ import {
   Pressable,
   StyleSheet,
   Image,
-  Alert,
-  Platform,
-  ToastAndroid,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useNavigation } from '@react-navigation/native';
@@ -24,24 +21,16 @@ import { useCloset } from '../../context/ClosetContext';
 import { useHauses } from '../../context/HausesContext';
 import { useFriends } from '../../context/FriendsContext';
 import { useAuth } from '../../context/AuthContext';
-import { inviteMembersToHaus } from '../../services/hausService';
+import { useConfirmation } from '../../context/ConfirmationContext';
+import { inviteMembersToHaus, fetchHausInviteCode } from '../../services/hausService';
+import { hausInviteUrl } from '../../utils/hausInvite';
 import type { Item, Friend } from '../../types';
 import type { Haus } from '../../types';
 
 const HAUS_TYPES = ['Sorority / Frat', 'Dorm Floor', 'Friend Group', 'Roommates', 'Other'];
-const INVITE_LINK = 'wearhaus.app/join/alpha-phi-c';
 
 function initialsOf(name: string): string {
   return name.trim().split(/\s+/).map((w) => w[0]).join('').toUpperCase().slice(0, 2);
-}
-
-
-function showToast(msg: string) {
-  if (Platform.OS === 'android') {
-    ToastAndroid.show(msg, ToastAndroid.SHORT);
-  } else {
-    Alert.alert('', msg);
-  }
 }
 
 export default function CreateHausScreen() {
@@ -50,6 +39,7 @@ export default function CreateHausScreen() {
   const { items: closetItems } = useCloset();
   const { friends } = useFriends();
   const { user, profile } = useAuth();
+  const confirm = useConfirmation();
 
   const [currentStep, setCurrentStep] = useState(1);
 
@@ -74,18 +64,29 @@ export default function CreateHausScreen() {
   // Step 3
   const [selectedItems, setSelectedItems] = useState<string[]>([]);
 
-  const canGoNext = currentStep === 1 ? hausName.trim().length > 0 : true;
+  // Step 4 — the Haus is created on the way into the success step, so the link it shows is
+  // the real one. A ref, so going back and forward again can't create it twice.
+  const created = useRef<Haus | null>(null);
+  const [creating, setCreating]     = useState(false);
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+
+  const canGoNext = (currentStep === 1 ? hausName.trim().length > 0 : true) && !creating;
 
   function handleBack() {
-    if (currentStep === 1) {
+    // Once the Haus exists there's nothing to go back and edit — leave instead.
+    if (currentStep === 1 || currentStep === 4) {
       navigation.goBack();
     } else {
       setCurrentStep((s) => s - 1);
     }
   }
 
-  function handleNext() {
+  async function handleNext() {
     if (!canGoNext) return;
+    if (currentStep === 3) {
+      setCreating(true);
+      try { await createHausAndInvite(); } finally { setCreating(false); }
+    }
     setCurrentStep((s) => s + 1);
   }
 
@@ -96,11 +97,13 @@ export default function CreateHausScreen() {
   }
 
   async function handleCopyLink() {
-    await Clipboard.setStringAsync(INVITE_LINK);
-    showToast('Copied!');
+    if (!inviteLink) return;
+    await Clipboard.setStringAsync(inviteLink);
+    confirm('Link copied');
   }
 
-  async function handleGoToHaus() {
+  async function createHausAndInvite() {
+    if (created.current) return;
     const pickedItems = closetItems.filter((i) => selectedItems.includes(i.id));
     const newHaus: Haus = {
       id: Date.now().toString(),
@@ -113,6 +116,7 @@ export default function CreateHausScreen() {
       items: pickedItems,
     };
     const finalHaus = await addHaus(newHaus);
+    created.current = finalHaus;
 
     if (user?.id && selectedFriendIds.length > 0) {
       try {
@@ -122,6 +126,15 @@ export default function CreateHausScreen() {
       }
     }
 
+    try {
+      const code = await fetchHausInviteCode(finalHaus.id);
+      if (code) setInviteLink(hausInviteUrl(code));
+    } catch {
+      // no link to show — Step4 says so
+    }
+  }
+
+  function handleGoToHaus() {
     navigation.goBack();
   }
 
@@ -176,8 +189,6 @@ export default function CreateHausScreen() {
           search={memberSearch}
           setSearch={setMemberSearch}
           youName={profile?.display_name ?? 'You'}
-          onCopyLink={handleCopyLink}
-          inviteLink={INVITE_LINK}
         />
       )}
       {currentStep === 3 && (
@@ -195,7 +206,7 @@ export default function CreateHausScreen() {
           selectedItems={selectedItems}
           onGoToHaus={handleGoToHaus}
           onCopyLink={handleCopyLink}
-          inviteLink={INVITE_LINK}
+          inviteLink={inviteLink}
         />
       )}
     </SafeAreaView>
@@ -271,11 +282,9 @@ function Step1({
 // ─────────────────────────────────────────────
 function Step2({
   friends, selectedFriendIds, onToggleMember, search, setSearch, youName,
-  onCopyLink, inviteLink,
 }: {
   friends: Friend[]; selectedFriendIds: string[]; onToggleMember: (id: string) => void;
   search: string; setSearch: (v: string) => void; youName: string;
-  onCopyLink: () => void; inviteLink: string;
 }) {
   const visibleFriends = search.trim()
     ? friends.filter((f) => f.name.toLowerCase().includes(search.trim().toLowerCase()))
@@ -339,28 +348,9 @@ function Step2({
       )}
 
       <SectionHeader label="Share Invite" />
-
-      {/* Share buttons */}
-      <View style={styles.shareRow}>
-        {[
-          { icon: 'link-outline' as const, label: 'Copy Link', onPress: onCopyLink },
-          { icon: 'qr-code-outline' as const, label: 'QR Code', onPress: () => {} },
-          { icon: 'share-social-outline' as const, label: 'Story', onPress: () => {} },
-        ].map(({ icon, label, onPress }) => (
-          <Pressable key={label} style={styles.shareBtn} onPress={onPress}>
-            <Ionicons name={icon} size={18} color={theme.colors.ink} />
-            <Text style={styles.shareBtnText}>{label.toUpperCase()}</Text>
-          </Pressable>
-        ))}
-      </View>
-
-      {/* Invite link display */}
-      <View style={styles.linkRow}>
-        <Text style={styles.linkText} numberOfLines={1}>{inviteLink}</Text>
-        <Pressable onPress={onCopyLink}>
-          <Text style={styles.linkCopy}>COPY</Text>
-        </Pressable>
-      </View>
+      <Text style={styles.noFriendsText}>
+        You'll get a link to share once your Haus is created — anyone with it can join.
+      </Text>
     </ScrollView>
   );
 }
@@ -422,7 +412,7 @@ function Step4({
   hausName, youName, invitedFriends, selectedItems, onGoToHaus, onCopyLink, inviteLink,
 }: {
   hausName: string; youName: string; invitedFriends: Friend[]; selectedItems: string[];
-  onGoToHaus: () => void; onCopyLink: () => void; inviteLink: string;
+  onGoToHaus: () => void; onCopyLink: () => void; inviteLink: string | null;
 }) {
   const previewFriends = invitedFriends.slice(0, 3);
 
@@ -470,10 +460,15 @@ function Step4({
         <Text style={styles.goBtnText}>GO TO HAUS</Text>
       </Pressable>
 
-      <Pressable style={styles.shareGhostBtn} onPress={onCopyLink}>
-        <Ionicons name="link-outline" size={14} color={theme.colors.ink} />
-        <Text style={styles.shareGhostText}>SHARE INVITE LINK</Text>
-      </Pressable>
+      {inviteLink && (
+        <>
+          <Pressable style={styles.shareGhostBtn} onPress={onCopyLink}>
+            <Ionicons name="link-outline" size={14} color={theme.colors.ink} />
+            <Text style={styles.shareGhostText}>COPY INVITE LINK</Text>
+          </Pressable>
+          <Text style={styles.linkText} numberOfLines={1}>{inviteLink}</Text>
+        </>
+      )}
     </ScrollView>
   );
 }
@@ -720,56 +715,12 @@ const styles = StyleSheet.create({
     backgroundColor: theme.colors.yellow,
     borderColor: theme.colors.yellowBorder,
   },
-  shareRow: {
-    flexDirection: 'row',
-    paddingHorizontal: 18,
-    gap: 8,
-    marginBottom: 12,
-  },
-  shareBtn: {
-    flex: 1,
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    borderWidth: 1.5,
-    borderColor: theme.colors.ink,
-    borderRadius: theme.borderRadius,
-    backgroundColor: theme.colors.ivory,
-  },
-  shareBtnText: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 8,
-    color: theme.colors.ink,
-    letterSpacing: 0.8,
-  },
-  linkRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginHorizontal: 18,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: theme.colors.ivoryMid,
-    borderRadius: theme.borderRadius,
-    backgroundColor: theme.colors.ivoryDark,
-    gap: 10,
-  },
   linkText: {
-    flex: 1,
     fontFamily: theme.fonts.interRegular,
     fontSize: 11,
     color: theme.colors.muted,
-  },
-  linkCopy: {
-    fontFamily: theme.fonts.barlowExtraBold,
-    fontSize: 9,
-    color: theme.colors.yellowText,
-    backgroundColor: theme.colors.yellow,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: theme.borderRadius,
-    overflow: 'hidden',
-    letterSpacing: 0.8,
+    textAlign: 'center',
+    marginTop: 10,
   },
 
   // Step 3 — item grid

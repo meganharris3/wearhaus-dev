@@ -104,6 +104,34 @@ export async function declineHausInvite(invitationId: string, userId: string): P
   if (error) throw new Error(error.message);
 }
 
+/** The code in this haus's /join/<code> invite link (019_haus_invite_links.sql), or null if
+ *  it has none. Only members can read it. */
+export async function fetchHausInviteCode(hausId: string): Promise<string | null> {
+  const { data, error } = await supabase
+    .from('haus_invite_links')
+    .select('code')
+    .eq('haus_id', hausId)
+    .maybeSingle();
+  if (error) throw new Error(error.message);
+  return data?.code ?? null;
+}
+
+export type HausInvitePreview = Haus & { is_member: boolean };
+
+/** The haus behind an invite code, for the join screen — null if the code doesn't exist. */
+export async function fetchHausInvitePreview(code: string): Promise<HausInvitePreview | null> {
+  const { data, error } = await supabase.rpc('haus_invite_preview', { p_code: code });
+  if (error) throw new Error(error.message);
+  return ((data as HausInvitePreview[] | null) ?? [])[0] ?? null;
+}
+
+/** Joins the signed-in user to the haus behind an invite code; returns the haus id. */
+export async function joinHausByInviteCode(code: string): Promise<string> {
+  const { data, error } = await supabase.rpc('join_haus_by_invite_code', { p_code: code });
+  if (error) throw new Error(error.message);
+  return data as string;
+}
+
 export async function updateHaus(
   hausId: string,
   updates: Partial<Pick<Haus, 'name' | 'description'>>,

@@ -44,6 +44,9 @@ import {
   inviteMembersToHaus,
   acceptHausInvite,
   declineHausInvite,
+  fetchHausInviteCode,
+  fetchHausInvitePreview,
+  joinHausByInviteCode,
 } from '../../services/hausService';
 import type { Haus } from '../../types';
 
@@ -398,5 +401,58 @@ describe('leaveHaus', () => {
     expect(deleteChain.eq).toHaveBeenCalledWith('haus_id', 'h1');
     expect(deleteChain.eq).toHaveBeenCalledWith('user_id', 'user-1');
     expect(mockRpc).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Invite links (019_haus_invite_links.sql)
+// ---------------------------------------------------------------------------
+describe('fetchHausInviteCode', () => {
+  it("reads the haus's code from haus_invite_links", async () => {
+    const chain = makeChain({ data: { code: 'abc123def456' }, error: null });
+    mockFrom.mockReturnValue(chain);
+
+    await expect(fetchHausInviteCode('h1')).resolves.toBe('abc123def456');
+    expect(mockFrom).toHaveBeenCalledWith('haus_invite_links');
+    expect(chain.eq).toHaveBeenCalledWith('haus_id', 'h1');
+  });
+
+  it("returns null when it can't see one (not a member)", async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: null }));
+    await expect(fetchHausInviteCode('h1')).resolves.toBeNull();
+  });
+
+  it('throws on Supabase error', async () => {
+    mockFrom.mockReturnValue(makeChain({ data: null, error: { message: 'DB error' } }));
+    await expect(fetchHausInviteCode('h1')).rejects.toThrow('DB error');
+  });
+});
+
+describe('fetchHausInvitePreview', () => {
+  it('returns the haus behind the code', async () => {
+    const row = { ...makeHaus(), is_member: false };
+    mockRpc.mockResolvedValueOnce({ data: [row], error: null });
+
+    await expect(fetchHausInvitePreview('abc123def456')).resolves.toEqual(row);
+    expect(mockRpc).toHaveBeenCalledWith('haus_invite_preview', { p_code: 'abc123def456' });
+  });
+
+  it('returns null for an unknown code', async () => {
+    mockRpc.mockResolvedValueOnce({ data: [], error: null });
+    await expect(fetchHausInvitePreview('nope')).resolves.toBeNull();
+  });
+});
+
+describe('joinHausByInviteCode', () => {
+  it('joins through the RPC and returns the haus id', async () => {
+    mockRpc.mockResolvedValueOnce({ data: 'h1', error: null });
+
+    await expect(joinHausByInviteCode('abc123def456')).resolves.toBe('h1');
+    expect(mockRpc).toHaveBeenCalledWith('join_haus_by_invite_code', { p_code: 'abc123def456' });
+  });
+
+  it('throws when the RPC refuses (bad code, signed out)', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'This invite link is not valid' } });
+    await expect(joinHausByInviteCode('nope')).rejects.toThrow('This invite link is not valid');
   });
 });
