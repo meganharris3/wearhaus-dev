@@ -37,24 +37,24 @@ export async function fetchAllHauses(opts: PageOpts = {}): Promise<Haus[]> {
   return (data ?? []) as Haus[];
 }
 
-export async function createHaus(
-  payload: Pick<Haus, 'name' | 'description'>,
-  userId: string,
-): Promise<Haus> {
-  const { data, error } = await supabase
-    .from('hauses')
-    .insert({ name: payload.name, description: payload.description ?? null })
-    .select('id, name, description, cover_url, member_count, piece_count')
-    .single();
+/**
+ * Creates a haus with the signed-in user as its admin, via the create_haus RPC
+ * (020_create_haus_rpc.sql) — the membership can't be inserted from here, since RLS only
+ * lets a user add themselves as a plain 'member'.
+ */
+export async function createHaus(payload: Pick<Haus, 'name' | 'description'>): Promise<Haus> {
+  const { data: hausId, error } = await supabase.rpc('create_haus', {
+    p_name: payload.name,
+    p_description: payload.description ?? null,
+  });
   if (error) throw new Error(error.message);
 
-  // Add creator as admin member — the trg_haus_member_count trigger
-  // increments member_count from its column default (0) to 1 here.
-  const { error: memberError } = await supabase
-    .from('haus_memberships')
-    .insert({ haus_id: data.id, user_id: userId, role: 'admin', joined_at: new Date().toISOString() });
-  if (memberError) throw new Error(memberError.message);
-
+  const { data, error: fetchError } = await supabase
+    .from('hauses')
+    .select('id, name, description, cover_url, member_count, piece_count')
+    .eq('id', hausId)
+    .single();
+  if (fetchError) throw new Error(fetchError.message);
   return data as Haus;
 }
 

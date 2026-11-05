@@ -54,16 +54,10 @@ export function HausesProvider({ children }: { children: React.ReactNode }) {
   async function addHaus(haus: Haus): Promise<Haus> {
     let finalHaus = haus;
 
-    // Save to Supabase if logged in
+    // Signed in, the haus has to really exist — a failure here is thrown to the caller
+    // rather than papered over with a local copy that has no members, link or invites.
     if (user?.id) {
-      try {
-        finalHaus = await createHausRemote(
-          { name: haus.name, description: haus.description },
-          user.id,
-        );
-      } catch {
-        // keep local haus
-      }
+      finalHaus = await createHausRemote({ name: haus.name, description: haus.description });
     }
 
     const updated = [finalHaus, ...hauses];

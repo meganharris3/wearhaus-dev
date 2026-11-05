@@ -296,18 +296,24 @@ describe('fetchAllHausMembers', () => {
 // createHaus
 // ---------------------------------------------------------------------------
 describe('createHaus', () => {
-  it('does not set member_count on insert — the DB trigger owns it', async () => {
-    const insertChain = makeChain({ data: makeHaus({ id: 'h1' }), error: null });
-    insertChain.single = jest.fn().mockResolvedValue({ data: makeHaus({ id: 'h1' }), error: null });
-    const membershipChain = makeChain({ data: null, error: null });
-    mockFrom
-      .mockReturnValueOnce(insertChain)     // .from('hauses')
-      .mockReturnValueOnce(membershipChain); // .from('haus_memberships')
+  it('creates the haus and its admin membership through the create_haus RPC, then returns the row', async () => {
+    mockRpc.mockResolvedValueOnce({ data: 'h1', error: null });
+    const chain = makeChain({ data: makeHaus({ id: 'h1', member_count: 1 }), error: null });
+    mockFrom.mockReturnValue(chain);
 
-    await createHaus({ name: 'Style Queens' }, 'user-1');
+    const haus = await createHaus({ name: 'Style Queens', description: 'ours' });
 
-    const insertCall = insertChain.insert.mock.calls[0][0];
-    expect(insertCall).not.toHaveProperty('member_count');
+    expect(mockRpc).toHaveBeenCalledWith('create_haus', { p_name: 'Style Queens', p_description: 'ours' });
+    // no direct inserts — RLS rejects a self-inserted admin membership
+    expect(chain.insert).not.toHaveBeenCalled();
+    expect(chain.eq).toHaveBeenCalledWith('id', 'h1');
+    expect(haus).toEqual(makeHaus({ id: 'h1', member_count: 1 }));
+  });
+
+  it('throws when the RPC fails, instead of returning a haus', async () => {
+    mockRpc.mockResolvedValueOnce({ data: null, error: { message: 'A haus needs a name' } });
+    await expect(createHaus({ name: ' ' })).rejects.toThrow('A haus needs a name');
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 

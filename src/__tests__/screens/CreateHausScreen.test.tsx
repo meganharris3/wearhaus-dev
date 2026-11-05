@@ -176,3 +176,17 @@ describe('CreateHausScreen invite link', () => {
     expect(screen.queryByText('COPY INVITE LINK')).toBeNull();
   });
 });
+
+describe('CreateHausScreen when creating fails', () => {
+  it('stays on the items step with an error, and sends no invites', async () => {
+    mockAddHaus.mockRejectedValue(new Error('rls'));
+    await goToStep2();
+    await act(async () => { fireEvent.press(screen.getByText('Jordan Lee')); });
+    await act(async () => { fireEvent.press(screen.getByText('NEXT')); });
+    await act(async () => { fireEvent.press(screen.getByText('NEXT')); });
+
+    expect(screen.getByText(/Couldn't create your Haus/)).toBeTruthy();
+    expect(screen.queryByText('GO TO HAUS')).toBeNull();
+    expect(mockInviteMembersToHaus).not.toHaveBeenCalled();
+  });
+});

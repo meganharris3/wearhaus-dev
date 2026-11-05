@@ -69,6 +69,7 @@ export default function CreateHausScreen() {
   const created = useRef<Haus | null>(null);
   const [creating, setCreating]     = useState(false);
   const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const canGoNext = (currentStep === 1 ? hausName.trim().length > 0 : true) && !creating;
 
@@ -85,7 +86,15 @@ export default function CreateHausScreen() {
     if (!canGoNext) return;
     if (currentStep === 3) {
       setCreating(true);
-      try { await createHausAndInvite(); } finally { setCreating(false); }
+      setCreateError(null);
+      try {
+        await createHausAndInvite();
+      } catch {
+        setCreateError("Couldn't create your Haus. Check your connection and try again.");
+        return;
+      } finally {
+        setCreating(false);
+      }
     }
     setCurrentStep((s) => s + 1);
   }
@@ -167,6 +176,8 @@ export default function CreateHausScreen() {
 
       {/* Progress bar */}
       <StepProgressBar currentStep={currentStep} />
+
+      {!!createError && currentStep === 3 && <Text style={styles.createError}>{createError}</Text>}
 
       {/* Step content */}
       {currentStep === 1 && (
@@ -693,6 +704,13 @@ const styles = StyleSheet.create({
     fontSize: 8,
     color: theme.colors.yellowText,
     letterSpacing: 1,
+  },
+  createError: {
+    fontFamily: theme.fonts.interRegular,
+    fontSize: 12,
+    color: '#C0392B',
+    paddingHorizontal: 18,
+    paddingTop: 10,
   },
   noFriendsText: {
     fontFamily: theme.fonts.interLight,
